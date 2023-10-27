@@ -1,34 +1,116 @@
 import os
 import numpy as np
-from hmmlearn import hmm
 
 
-down_points_dir = {}
-down_txt_path = 'F:\earth_rosbag\\test_hmm\data\down_sample_set_bag5'
-file_list = os.listdir(down_txt_path)
-for l in file_list:
-    file = os.path.join(down_txt_path, l)
-    # print("process {}".format(file))
-    down_points = []
-    with open(file, 'r') as f:
-        lines = f.readlines()
-        for line in lines:
-            one_list = line.split(', ')
-            one_point = {}
-            one_point['xyz'] = [float(str_num) for str_num in one_list[0:3]]
-            # one_point.append(len(one_list)-4)
-            one_point['obs']=[]
-            for str in one_list[4:-1]:
-                one_point['obs'].append(int(str))
-            one_point['obs'].append(int(one_list[-1][0]))
-            down_points.append(one_point)
-    down_points_dir[len(one_list)-4] = down_points
+start_pron = np.array([0.3, 0.6, 0.1]).T  # pi
+trans_state = np.array([[0.8, 0.1, 0.1],
+                    [0.1, 0.8, 0.1],
+                    [0.1, 0.1, 0.8]])
+emission = np.array([[0.76, 0.01, 0.01, 0.1, 0.1, 0.01, 0.01],
+                      [0.01, 0.76, 0.01, 0.1, 0.1, 0.01, 0.01],
+                      [0.01, 0.01, 0.76, 0.1, 0.1, 0.01, 0.01]])
+states = ["none", "stone", "sand"]
+vocabulary = [0,1,2,3,4,5,6]  # obs state
 
-print('length is {}'.format(down_points_dir[10][1]))
+
+class HMM:
+    """
+    https://applenob.github.io/machine_learning/HMM/
+    ----------
+    A : numpy.ndarray
+        State transition probability matrix
+    B: numpy.ndarray
+        Output emission probability matrix with shape(N, number of output types)
+    pi: numpy.ndarray
+        Initial state probablity vector
+    """
+    def __init__(self, A, B, pi):
+        self.A = A
+        self.B = B
+        self.pi = pi
+
+    def forward(self, obs_seq):
+        """前向算法"""
+        N = self.A.shape[0]
+        T = len(obs_seq)
+
+        # 整个序列的概率 F
+        F = np.zeros((N, T))
+        F[:, 0] = self.pi * self.B[:, obs_seq[0]] # initial prob, 3x1 * 3x1 = 3x1
+
+        for t in range(1, T): # recursion prob
+            for n in range(N):
+                F[n, t] = np.dot(F[:, t - 1], (self.A[:, n])) * self.B[n, obs_seq[t]]  # sum(alpha * a)*b
+
+        return F
+
+    def backward(self, obs_seq):
+        """后向算法"""
+        N = self.A.shape[0]
+        T = len(obs_seq)
+        # X保存后向概率矩阵
+        X = np.zeros((N, T))
+        X[:, -1:] = 1
+
+        for t in reversed(range(T - 1)):
+            for n in range(N):
+                X[n, t] = np.sum(X[:, t + 1] * self.A[n, :] * self.B[:, obs_seq[t + 1]])
+
+        return X
+
+    def baum_welch_train(self, observations, criterion=0.05):
+        """无监督学习算法——Baum-Weich算法"""
+        n_states = self.A.shape[0]
+        n_samples = len(observations)  # 单个序列
+
+        done = False
+        while not done:
+            # alpha_t(i) = P(O_1 O_2 ... O_t, q_t = S_i | hmm)
+            # Initialize alpha
+            alpha = self.forward(observations)
+
+            # beta_t(i) = P(O_t+1 O_t+2 ... O_T | q_t = S_i , hmm)
+            # Initialize beta
+            beta = self.backward(observations)
+            # ξ_t(i,j)=P(i_t=q_i,i_{i+1}=q_j|O,λ)
+            xi = np.zeros((n_states, n_states, n_samples - 1))
+            for t in range(n_samples - 1):
+                denom = np.dot(np.dot(alpha[:, t].T, self.A) * self.B[:, observations[t + 1]].T, beta[:, t + 1])
+                for i in range(n_states):
+                    numer = alpha[i, t] * self.A[i, :] * self.B[:, observations[t + 1]].T * beta[:, t + 1].T
+                    xi[i, :, t] = numer / denom
+
+            # γ_t(i)：gamma_t(i) = P(q_t = S_i | O, hmm)
+            gamma = np.sum(xi, axis=1)
+            # Need final gamma element for new B
+            # xi的第三维长度n_samples-1，少一个，所以gamma要计算最后一个
+            prod = (alpha[:, n_samples - 1] * beta[:, n_samples - 1]).reshape((-1, 1))
+            gamma = np.hstack((gamma, prod / np.sum(prod)))  # append one more to gamma!!!
+
+            # 更新模型参数
+            newpi = gamma[:, 0]
+            newA = np.sum(xi, 2) / np.sum(gamma[:, :-1], axis=1).reshape((-1, 1))
+            newB = np.copy(self.B)
+            num_levels = self.B.shape[1]
+            sumgamma = np.sum(gamma, axis=1)
+            for lev in range(num_levels):
+                mask = observations == lev
+                newB[:, lev] = np.sum(gamma[:, mask], axis=1) / sumgamma
+
+            # 检查是否满足阈值
+            if np.max(abs(self.pi - newpi)) < criterion and \
+                    np.max(abs(self.A - newA)) < criterion and \
+                    np.max(abs(self.B - newB)) < criterion:
+                done = 1
+            self.A[:], self.B[:], self.pi[:] = newA, newB, newpi
+        return newA, newB, newpi
+
+
+if __name__ == "__main__":
+    model = HMM(trans_state, emission, start_pron)
 
 # initial configure lambda
-# states = ["none", "stone", "sand"]
-# vocabulary = [0,1,2,3,4,5,6]  # obs state
+
 # # data 每种观测次数要统计到状态列表中 [ 20  73   0   7   0   0   0]
 # train_x_list=[]
 # for l in down_points_dir[100]:
@@ -37,14 +119,8 @@ print('length is {}'.format(down_points_dir[10][1]))
 # train_x = np.array(train_x_list, dtype=int)
 # print('train data length is {}'.format(train_x.shape))
 # print(train_x[:2, :])
-# # initial
-# startprob = np.array([0.3, 0.6, 0.1])  # pi
-# transmat = np.array([[0.8, 0.1, 0.1],
-#                     [0.1, 0.8, 0.1],
-#                     [0.1, 0.1, 0.8]])
-# emissionprob = np.array([[0.76, 0.01, 0.01, 0.1, 0.1, 0.01, 0.01],
-#                       [0.01, 0.76, 0.01, 0.1, 0.1, 0.01, 0.01],
-#                       [0.01, 0.01, 0.76, 0.1, 0.1, 0.01, 0.01]])
+# initial
+
 # model = hmm.MultinomialHMM(n_components=len(states),
 #                             n_trials=100,  # 观测序列的次数
 #                             n_iter=10,

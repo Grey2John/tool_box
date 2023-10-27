@@ -2,19 +2,22 @@ import numpy as np
 import os
 import open3d as o3d
 
-startprob = np.array([[0.8, 0.1, 0.1],   # none
-                     [0.1, 0.8, 0.1],   # rock
-                     [0.1, 0.1, 0.8]])   # sand
+import data_loader
+import data_loader as DL
+
+startprob = np.array([[0.6, 0.2, 0.2],   # none
+                     [0.2, 0.6, 0.2],   # rock
+                     [0.2, 0.2, 0.6]])   # sand
 transmat = np.array([[0.99331,	0.00398,	0.00271],
                     [0.00378,	0.98598,	0.01025],
                     [0.00388,	0.01522,	0.98090]])
-emissionprob = np.array([[0.99727, 0.00005, 0.00006, 0.00117, 0.00144, 0,	0],
-                      [0.02670,	0.91723, 0.00195, 0.05120, 0.00051,	0.00047, 0.00194],
-                      [0.00818,	0.00893, 0.89637, 0.00217, 0.08162, 0.00030, 0.00243]])
+emissionprob = np.array([[0.89727, 0.00005, 0.00006, 0.05117, 0.05144, 0,	0],
+                      [0.02670,	0.81723, 0.00195, 0.05120, 0.05051,	0.05047, 0.00194],
+                      [0.00818,	0.00893, 0.82637, 0.05217, 0.10162, 0.00030, 0.00243]])
 
-label_rgb = np.array([[0, 0, 255],   # none
-                     [255, 0, 0],   # rock
-                     [0, 255, 0]])   # sand
+label_rgb = np.array([[0, 0.2, 1],   # none
+                     [1, 0, 0],   # rock
+                     [0, 1, 0]])   # sand
 
 
 class PointHMM:
@@ -49,47 +52,6 @@ class PointHMM:
         return point_out
 
 
-class DataLoader:
-    def __init__(self, down_txt_path):
-        self.down_txt_path = down_txt_path
-        self.file_list = os.listdir(down_txt_path)
-        self.down_points_dir = {}
-
-        self.load()
-
-    def load(self):
-        for l in self.file_list:
-            file = os.path.join(self.down_txt_path, l)
-            # print("process {}".format(file))
-            same_times_obs = []
-            with open(file, 'r') as f:
-                lines = f.readlines()
-                for line in lines:
-                    one_list = line.split(', ')
-                    one_point = {}
-                    one_point['xyz'] = [float(str_num) for str_num in one_list[0:3]]
-                    one_point['first_state'] = int(one_list[3])
-
-                    one_point['obs'] = []
-                    for str in one_list[4:-1]:
-                        one_point['obs'].append(int(str))
-                    one_point['obs'].append(int(one_list[-1][0]))
-                    same_times_obs.append(one_point)
-            self.down_points_dir[len(one_list)-4] = same_times_obs
-        print('length is {}'.format(self.down_points_dir[10][1]))
-
-    def obs_time_points_all(self, obs_time):
-        """{'xyz': [4.29805, 1.79933, 0.800642], 'obs': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}"""
-        point_cloud = []
-        for key, value in self.down_points_dir.items():
-            for p in value:
-                one_point = p['xyz']
-                one_point.append(p['first_state'])
-                one_point = one_point + p['obs'][:obs_time]
-                point_cloud.append(one_point)
-        return point_cloud
-
-
 class LabelPCD:
     def __init__(self, point_cloud):
         """ point_could list x,y,z,label """
@@ -107,13 +69,50 @@ class LabelPCD:
         for i in range(self.points_array.shape[0]):
             self.color[i, :] = label_rgb[self.points_label_array[i], :]
 
+
     def generate(self, save_path, name):
         self.pcd.point.positions = o3d.core.Tensor(self.points_array[:, 0:3], self.dtype, self.device)
         self.pcd.point.colors = o3d.core.Tensor(self.color, self.dtype, self.device)
 
         save_file = os.path.join(save_path, '{}.pcd'.format(name))
         print("save path is {}".format(save_file))
-        o3d.t.io.write_point_cloud(save_file, self.pcd, write_ascii=True)
+        o3d.t.io.write_point_cloud(save_file, self.pcd, write_ascii=False)
+
+
+def one_obs_txt2pcd(txt_dir, save_path):
+    for txt in os.listdir(txt_dir):
+        if '.txt' in txt:
+            print("process {}".format(txt))
+            data = data_loader.PointDataLoader( os.path.join(txt_dir, txt) )
+            points = data.read_txt_list_state_points()
+
+            name = txt.split('.')[0]
+            pcd = LabelPCD(points)
+            pcd.generate(save_path, name)
+
+
+class PointList2RGBPCD:
+    def __init__(self, point_cloud):
+        """ point_could list x,y,z,rgb, array"""
+        self.device = o3d.core.Device("CPU:0")
+        self.dtype = o3d.core.float32
+        self.pcd = o3d.t.geometry.PointCloud(self.device)
+        self.point_cloud_array = np.array(point_cloud)
+        self.points_array = self.point_cloud_array[:, 0:3]
+
+        color = np.zeros((self.points_array.shape[0], 3))
+        color[:, 0] = self.point_cloud_array[:, 5]
+        color[:, 1] = self.point_cloud_array[:, 4]
+        color[:, 2] = self.point_cloud_array[:, 3]
+        self.color = np.divide(color, 255)
+
+    def generate(self, save_path, name):
+        self.pcd.point.positions = o3d.core.Tensor(self.points_array, self.dtype, self.device)
+        self.pcd.point.colors = o3d.core.Tensor(self.color, self.dtype, self.device)
+
+        save_file = os.path.join(save_path, '{}.pcd'.format(name))
+        print("save path is {}".format(save_file))
+        o3d.t.io.write_point_cloud(save_file, self.pcd, write_ascii=False)
 
 
 def get_pic(pcd_path, save_path, name):
@@ -133,22 +132,34 @@ def get_pic(pcd_path, save_path, name):
     vis.destroy_window()
 
 
+def txt_HMM_pcd(point_set, save_path, name):
+    """
+    {'xyz': [4.68743, 1.16662, -0.874653], 'init_state': 0, 'obs': [0, 0, 0, 0, 0, 0]}
+    读txt，经过hmm预测后，保存为pcd，所有点观测n次以内的效果
+    """
+    print("the length of point is {}".format(len(point_set)))
+    point_for_pcd = []
+    for p in point_set:
+        point = PointHMM(3)
+        point_for_pcd.append(point.filter(p))
+    print("the length of label point is {}".format(len(point_for_pcd)))
+    print(point_for_pcd[0])
+    pcd = LabelPCD(point_for_pcd)
+    pcd.generate(save_path, name)
+
+
 if __name__ == "__main__":
     obs_time = 20
 
-    # down_txt_path = 'F:\earth_rosbag\\test_hmm\data\down_sample_set_bag5'
-    # data = DataLoader(down_txt_path)
-    # point_set = data.obs_time_points_all(obs_time)
-    # print("the length of point is {}".format(len(point_set)))
-    # point_for_pcd = []
-    # for p in point_set:
-    #     point = PointHMM(3)
-    #     point_for_pcd.append(point.filter(p))
-    # print("the length of label point is {}".format(len(point_for_pcd)))
-    # print(point_for_pcd[0])
-    # pcd = LabelPCD(point_for_pcd)
-    # pcd.generate("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time))
+    down_txt_path = '/home/zlh/data/sandpile_source/data/test3/r3live_4pixel/bag1.txt'
+    save_path = '/home/zlh/data/sandpile_source/data/test3/filter_pcd'
+    data = DL.PointDataLoader(down_txt_path)
+    points_in = data.read_txt_list_points(obs_time)
+    txt_HMM_pcd(points_in, save_path, "filter1")
+    points_out = [row[:4] for row in points_in]
+    one_obs_pcd = LabelPCD( points_out )
+    one_obs_pcd.generate(save_path, "non_filter1") # 观察一次的
 
     # save pic
-    pcd_path = os.path.join("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time)+".pcd")
-    get_pic(pcd_path, "F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time))
+    # pcd_path = os.path.join("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time)+".pcd")
+    # get_pic(pcd_path, "F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time))
