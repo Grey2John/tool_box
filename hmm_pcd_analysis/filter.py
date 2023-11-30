@@ -2,19 +2,25 @@ import numpy as np
 import os
 import open3d as o3d
 
-startprob = np.array([[0.8, 0.1, 0.1],   # none
-                     [0.1, 0.8, 0.1],   # rock
-                     [0.1, 0.1, 0.8]])   # sand
-transmat = np.array([[0.99331,	0.00398,	0.00271],
-                    [0.00378,	0.98598,	0.01025],
-                    [0.00388,	0.01522,	0.98090]])
-emissionprob = np.array([[0.99727, 0.00005, 0.00006, 0.00117, 0.00144, 0,	0],
-                      [0.02670,	0.91723, 0.00195, 0.05120, 0.00051,	0.00047, 0.00194],
-                      [0.00818,	0.00893, 0.89637, 0.00217, 0.08162, 0.00030, 0.00243]])
+import data_loader
+import data_loader as DL
 
-label_rgb = np.array([[0, 0, 255],   # none
-                     [255, 0, 0],   # rock
-                     [0, 255, 0]])   # sand
+startprob = np.array([[0.4, 0.3, 0.3],   # none
+                     [0.4, 0.3, 0.3],   # rock
+                     [0.4, 0.3, 0.3]])   # sand
+transmat = np.array([[0.985,	0.009,	0.0063],
+                    [0.02845,	0.9711,	0.0004],
+                    [0.0092,	0.0005,	0.9903]])
+emissionprob = np.array([[0.9974, 0.00039, 0.0000017, 0.00118, 0.00102, 0,	0],
+                      [0.12693,	0.75310, 0.000039, 0.11413, 0.00042, 0.00291, 0.00246],
+                      [0.02638,	0.0004477, 0.78807, 0.00094, 0.1532, 0.00963, 0.02133]]) # matlab
+# emissionprob = np.array([[0.9547,  0.0093,  0.00722, 0.0197,  0.00879, 0.00003, 0.00026],
+#                       [0.32442, 0.6175, 0.00679, 0.03402, 0.00429, 0.0033, 0.00969],
+#                       [0.45914, 0.02241, 0.47941, 0.01243, 0.02132, 0.00137, 0.00392]]) # matlab
+
+label_rgb = np.array([[0, 0.5, 1],   # none
+                     [1, 0, 0],   # rock
+                     [0, 1, 0]])   # sand
 
 
 class PointHMM:
@@ -41,53 +47,30 @@ class PointHMM:
     def filter(self, point_in):
         """from xyz,initial,obs_list to xyz,label"""
         self.initial_state = startprob[point_in[3], :]
+        # self.initial_state = startprob[0, :]
         point_out = point_in[:3]
 
         self.T_prob = self.forward(point_in[4:])  # sum prob t=T
         label = np.argmax(self.current_state)
-        point_out.append(label)
+        point_out.append(int(label))
         return point_out
 
+    def filter_all_list(self, point_in):
+        """ 输入一个点的观测系列，输出这个点所有观测次的预测结果list
+        还加入了第一次无观察的点
+        """
+        ys = point_in[4:]
+        filtered_list = [point_in[3]]  # 还加入了第一次无观察的点
+        self.initial_state = startprob[point_in[3], :]
+        alpha_prob = np.multiply(self.initial_state, self.emission_prob[:, ys[0]].T)  # t=1
+        label = np.argmax(alpha_prob)
+        filtered_list.append(int(label))
 
-class DataLoader:
-    def __init__(self, down_txt_path):
-        self.down_txt_path = down_txt_path
-        self.file_list = os.listdir(down_txt_path)
-        self.down_points_dir = {}
-
-        self.load()
-
-    def load(self):
-        for l in self.file_list:
-            file = os.path.join(self.down_txt_path, l)
-            # print("process {}".format(file))
-            same_times_obs = []
-            with open(file, 'r') as f:
-                lines = f.readlines()
-                for line in lines:
-                    one_list = line.split(', ')
-                    one_point = {}
-                    one_point['xyz'] = [float(str_num) for str_num in one_list[0:3]]
-                    one_point['first_state'] = int(one_list[3])
-
-                    one_point['obs'] = []
-                    for str in one_list[4:-1]:
-                        one_point['obs'].append(int(str))
-                    one_point['obs'].append(int(one_list[-1][0]))
-                    same_times_obs.append(one_point)
-            self.down_points_dir[len(one_list)-4] = same_times_obs
-        print('length is {}'.format(self.down_points_dir[10][1]))
-
-    def obs_time_points_all(self, obs_time):
-        """{'xyz': [4.29805, 1.79933, 0.800642], 'obs': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}"""
-        point_cloud = []
-        for key, value in self.down_points_dir.items():
-            for p in value:
-                one_point = p['xyz']
-                one_point.append(p['first_state'])
-                one_point = one_point + p['obs'][:obs_time]
-                point_cloud.append(one_point)
-        return point_cloud
+        for i, y in enumerate(ys[1:]):
+            alpha_prob = np.multiply(np.matmul(alpha_prob, self.trans_mat), self.emission_prob[:, y].T)
+            label = np.argmax(alpha_prob)
+            filtered_list.append(int(label))
+        return filtered_list  # [first label, obs_list]
 
 
 class LabelPCD:
@@ -113,7 +96,44 @@ class LabelPCD:
 
         save_file = os.path.join(save_path, '{}.pcd'.format(name))
         print("save path is {}".format(save_file))
-        o3d.t.io.write_point_cloud(save_file, self.pcd, write_ascii=True)
+        o3d.t.io.write_point_cloud(save_file, self.pcd, write_ascii=False)
+
+
+def one_obs_txt2pcd(txt_dir, save_path):
+    for txt in os.listdir(txt_dir):
+        if '.txt' in txt:
+            print("process {}".format(txt))
+            data = data_loader.PointDataLoader( os.path.join(txt_dir, txt) )
+            points = data.read_txt_list_state_points()
+
+            name = txt.split('.')[0]
+            pcd = LabelPCD(points)
+            pcd.generate(save_path, name)
+
+
+class PointList2RGBPCD:
+    """ 生成rbg的pcd """
+    def __init__(self, point_cloud):
+        """ point_could list x,y,z,rgb(0~255), array"""
+        self.device = o3d.core.Device("CPU:0")
+        self.dtype = o3d.core.float32
+        self.pcd = o3d.t.geometry.PointCloud(self.device)
+        self.point_cloud_array = np.array(point_cloud)
+        self.points_array = self.point_cloud_array[:, 0:3]
+
+        color = np.zeros((self.points_array.shape[0], 3))
+        color[:, 0] = self.point_cloud_array[:, 5]
+        color[:, 1] = self.point_cloud_array[:, 4]
+        color[:, 2] = self.point_cloud_array[:, 3]
+        self.color = np.divide(color, 255)
+
+    def generate(self, save_path, name):
+        self.pcd.point.positions = o3d.core.Tensor(self.points_array, self.dtype, self.device)
+        self.pcd.point.colors = o3d.core.Tensor(self.color, self.dtype, self.device)
+
+        save_file = os.path.join(save_path, '{}.pcd'.format(name))
+        print("save path is {}".format(save_file))
+        o3d.t.io.write_point_cloud(save_file, self.pcd, write_ascii=False)
 
 
 def get_pic(pcd_path, save_path, name):
@@ -133,22 +153,80 @@ def get_pic(pcd_path, save_path, name):
     vis.destroy_window()
 
 
-if __name__ == "__main__":
-    obs_time = 20
+def txt_HMM_pcd(point_set, save_path, name):
+    """
+    {'xyz': [4.68743, 1.16662, -0.874653], 'init_state': 0, 'obs': [0, 0, 0, 0, 0, 0]}
+    读txt，经过hmm预测后，保存为pcd，所有点观测n次以内的效果
+    """
+    print("the length of point is {}".format(len(point_set)))
+    point_for_pcd = []
+    for p in point_set:
+        point = PointHMM(3)
+        point_for_pcd.append(point.filter(p))
+    print("the length of label point is {}".format(len(point_for_pcd)))
+    print(point_for_pcd[0])
+    pcd = LabelPCD(point_for_pcd)
+    pcd.generate(save_path, name)
 
-    # down_txt_path = 'F:\earth_rosbag\\test_hmm\data\down_sample_set_bag5'
-    # data = DataLoader(down_txt_path)
-    # point_set = data.obs_time_points_all(obs_time)
-    # print("the length of point is {}".format(len(point_set)))
-    # point_for_pcd = []
-    # for p in point_set:
-    #     point = PointHMM(3)
-    #     point_for_pcd.append(point.filter(p))
-    # print("the length of label point is {}".format(len(point_for_pcd)))
-    # print(point_for_pcd[0])
-    # pcd = LabelPCD(point_for_pcd)
-    # pcd.generate("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time))
+
+def render_rbg_label_pcd(txt_path, save_path, name):
+    """
+    渲染pcd,将识别出来的语义换上其他颜色
+    [xyz, rgb, label] to [xyz, rgb] pcd
+    """
+    data = DL.PointDataLoader(txt_path)
+    points_in = data.read_txt_list_points()  # [xyz, rgb, ]
+    txt_HMM_pcd(points_in, save_path, "filter1")
+    points_out = [row[:4] for row in points_in]
+
+    new_points = []
+    for p in points_out:
+        rgb_point = p[0:3]
+        if p[4] != 0:
+            new_mask = label_rgb[p[4], :]
+            old_rgb = np.array(p[5:8])
+            rgb_point = rgb_point + ((new_mask + old_rgb) / 2).tolist()
+        else:
+            rgb_point = rgb_point + p[5:8]
+        new_points.append(rgb_point)  # [xyz, rgb]
+
+    pcd = PointList2RGBPCD(new_points)
+    pcd.generate(save_path, name)
+
+
+def gamma(alpha, beta, t, i, N):
+    """
+    根据课本公式【10.24】计算γ
+    :param t: 当前时间点
+    :param i: 当前状态节点
+    :return: γ值
+    """
+    numerator = alpha[t][i] * beta[t][i]
+    denominator = 0.
+
+    for j in range(N):
+        denominator += (alpha[t][j] * beta[t][j])
+
+    return numerator / denominator
+
+
+if __name__ == "__main__":
+    # 生成过滤和非过滤的pcd对比文件
+    obs_time = 12
+    down_txt_path = 'F:\earth_rosbag\data\\test3\\r3live_4pixel\\bag1.txt'
+    save_path = 'F:\earth_rosbag\data\\test3\\filter_pcd'
+    data = DL.PointDataLoader(down_txt_path)
+    points_in = data.read_txt_list_points(obs_time, 46)
+    txt_HMM_pcd(points_in, save_path, "filter1")
+    points_out = [row[:4] for row in points_in]
+    one_obs_pcd = LabelPCD( points_out )
+    one_obs_pcd.generate(save_path, "non_filter1") # 观察一次的
 
     # save pic
-    pcd_path = os.path.join("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time)+".pcd")
-    get_pic(pcd_path, "F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time))
+    # pcd_path = os.path.join("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time)+".pcd")
+    # get_pic(pcd_path, "F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time))
+
+    # mix pcd
+    # save_path = 'F:\earth_rosbag\data\\test3\mix_pcd'
+    # txt_path = 'F:\earth_rosbag\data\\test3\\r3live_4pixel\\bag11.txt'
+    # render_rbg_label_pcd(txt_path, save_path, 'bag11')
