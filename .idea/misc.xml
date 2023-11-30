@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+<<<<<<< HEAD
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.8 (yolo)" project-jdk-type="Python SDK" />
+=======
+  <component name="Black">
+    <option name="sdkName" value="Python 3.8 (ultralytics-main)" />
+  </component>
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.8 (pcd_gen)" project-jdk-type="Python SDK" />
+>>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
 </project>

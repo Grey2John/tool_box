@@ -5,6 +5,7 @@ import open3d as o3d
 import data_loader
 import data_loader as DL
 
+<<<<<<< HEAD
 startprob = np.array([[0.4, 0.3, 0.3],   # none
                      [0.4, 0.3, 0.3],   # rock
                      [0.4, 0.3, 0.3]])   # sand
@@ -19,6 +20,19 @@ emissionprob = np.array([[0.9974, 0.00039, 0.0000017, 0.00118, 0.00102, 0,	0],
 #                       [0.45914, 0.02241, 0.47941, 0.01243, 0.02132, 0.00137, 0.00392]]) # matlab
 
 label_rgb = np.array([[0, 0.5, 1],   # none
+=======
+startprob = np.array([[0.6, 0.2, 0.2],   # none
+                     [0.2, 0.6, 0.2],   # rock
+                     [0.2, 0.2, 0.6]])   # sand
+transmat = np.array([[0.99331,	0.00398,	0.00271],
+                    [0.00378,	0.98598,	0.01025],
+                    [0.00388,	0.01522,	0.98090]])
+emissionprob = np.array([[0.89727, 0.00005, 0.00006, 0.05117, 0.05144, 0,	0],
+                      [0.02670,	0.81723, 0.00195, 0.05120, 0.05051,	0.05047, 0.00194],
+                      [0.00818,	0.00893, 0.82637, 0.05217, 0.10162, 0.00030, 0.00243]])
+
+label_rgb = np.array([[0, 0.2, 1],   # none
+>>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
                      [1, 0, 0],   # rock
                      [0, 1, 0]])   # sand
 
@@ -66,6 +80,7 @@ class PointHMM:
         label = np.argmax(alpha_prob)
         filtered_list.append(int(label))
 
+<<<<<<< HEAD
         for i, y in enumerate(ys[1:]):
             alpha_prob = np.multiply(np.matmul(alpha_prob, self.trans_mat), self.emission_prob[:, y].T)
             label = np.argmax(alpha_prob)
@@ -73,6 +88,8 @@ class PointHMM:
         return filtered_list  # [first label, obs_list]
 
 
+=======
+>>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
 class LabelPCD:
     def __init__(self, point_cloud):
         """ point_could list x,y,z,label """
@@ -89,6 +106,7 @@ class LabelPCD:
     def color_render(self):
         for i in range(self.points_array.shape[0]):
             self.color[i, :] = label_rgb[self.points_label_array[i], :]
+
 
     def generate(self, save_path, name):
         self.pcd.point.positions = o3d.core.Tensor(self.points_array[:, 0:3], self.dtype, self.device)
@@ -112,9 +130,14 @@ def one_obs_txt2pcd(txt_dir, save_path):
 
 
 class PointList2RGBPCD:
+<<<<<<< HEAD
     """ 生成rbg的pcd """
     def __init__(self, point_cloud):
         """ point_could list x,y,z,rgb(0~255), array"""
+=======
+    def __init__(self, point_cloud):
+        """ point_could list x,y,z,rgb, array"""
+>>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
         self.device = o3d.core.Device("CPU:0")
         self.dtype = o3d.core.float32
         self.pcd = o3d.t.geometry.PointCloud(self.device)
@@ -169,6 +192,7 @@ def txt_HMM_pcd(point_set, save_path, name):
     pcd.generate(save_path, name)
 
 
+<<<<<<< HEAD
 def render_rbg_label_pcd(txt_path, save_path, name):
     """
     渲染pcd,将识别出来的语义换上其他颜色
@@ -217,6 +241,15 @@ if __name__ == "__main__":
     save_path = 'F:\earth_rosbag\data\\test3\\filter_pcd'
     data = DL.PointDataLoader(down_txt_path)
     points_in = data.read_txt_list_points(obs_time, 46)
+=======
+if __name__ == "__main__":
+    obs_time = 20
+
+    down_txt_path = '/home/zlh/data/sandpile_source/data/test3/r3live_4pixel/bag1.txt'
+    save_path = '/home/zlh/data/sandpile_source/data/test3/filter_pcd'
+    data = DL.PointDataLoader(down_txt_path)
+    points_in = data.read_txt_list_points(obs_time)
+>>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
     txt_HMM_pcd(points_in, save_path, "filter1")
     points_out = [row[:4] for row in points_in]
     one_obs_pcd = LabelPCD( points_out )
@@ -225,8 +258,11 @@ if __name__ == "__main__":
     # save pic
     # pcd_path = os.path.join("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time)+".pcd")
     # get_pic(pcd_path, "F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time))
+<<<<<<< HEAD
 
     # mix pcd
     # save_path = 'F:\earth_rosbag\data\\test3\mix_pcd'
     # txt_path = 'F:\earth_rosbag\data\\test3\\r3live_4pixel\\bag11.txt'
     # render_rbg_label_pcd(txt_path, save_path, 'bag11')
+=======
+>>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
