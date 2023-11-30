@@ -133,6 +133,40 @@ class PointDataLoader:
         print(points[10][1])
         return points
 
+    def read_txt_dic_points_with_obs_times(self):
+        """
+        input txt: xyz, rgb, No, first_state, obs_state, obs_time, ...
+        output two data:
+        point list: [xyz, rgb, No, first_state, obs_state, obs_time, ...]
+        index dic: {'obs No': [point index], ...}
+        """
+        points = []
+        points_dic = {}
+        point_num = 0
+        with open(self.txt_path, 'r') as f:
+            lines = f.readlines()
+            print("we got {} points".format(len(lines)))
+            for line in lines:
+                one_list = line.split(', ')
+                one_point = [float(str_num) for str_num in one_list[0:6]]  # xyz rgb
+                one_point.append(int(one_list[6]))  # No
+                one_point.append(int(one_list[7]))  # first state
+                if len(one_list[8:]) % 2 != 0:
+                    continue
+                one_list[-1] = one_list[-1].replace('\n', '')
+                for i in range(int(len(one_list[8:])/2)):
+                    one_point.append(int(one_list[8 + 2*i]))
+                    one_point.append(int(one_list[8 + 2*i + 1]))
+                    if points_dic.get(int(one_list[8 + 2*i + 1])) is None:
+                        points_dic[ int(one_list[8 + 2*i + 1]) ] = [point_num]
+                    else:
+                        points_dic[int(one_list[8 + 2*i + 1])].append(point_num)
+                points.append(one_point)
+
+                point_num += 1
+            print("finish the points reading")
+        return points, points_dic
+
 
 def down_sample(origin_point, alpha1, save_path):
     """生成降采样的txt文件"""
@@ -182,7 +216,11 @@ if __name__ == "__main__":
     # 生成pcd文件
 
     # 原始点到pcd
-    read_tool = PointDataLoader("/home/zlh/data/sandpile_source/data/test1/pixel4_r3live/bag6.txt")
-    xyzrgb = read_tool.read_txt_list_rgbpoints()
-    print(xyzrgb[5])
-    pcd_generate(xyzrgb, '/home/zlh/data/sandpile_source/data/test1/origin_pcd_for_label', 'origin6')
+    # read_tool = PointDataLoader("/home/zlh/data/sandpile_source/data/test1/pixel4_r3live/bag6.txt")
+    # xyzrgb = read_tool.read_txt_list_rgbpoints()
+    # print(xyzrgb[5])
+    # pcd_generate(xyzrgb, '/home/zlh/data/sandpile_source/data/test1/origin_pcd_for_label', 'origin6')
+
+    # 有观测序号的txt
+    read_tool = PointDataLoader("/media/zlh/zhang/earth_rosbag/data/test3/obs_times_txt/bag12.txt")
+    point, point_index = read_tool.read_txt_dic_points_with_obs_times()
