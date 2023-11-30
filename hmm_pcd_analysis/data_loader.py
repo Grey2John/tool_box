@@ -20,10 +20,7 @@ point_templet = {
   'no': 2880, 'init_state': 0, 'obs_queue': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}
 """
 
-<<<<<<< HEAD
 
-=======
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
 class PointDataLoader:
     def __init__(self, txt_path):
         self.txt_path = txt_path
@@ -46,39 +43,27 @@ class PointDataLoader:
                     one_point = {}
                     one_point['xyz'] = [float(str_num) for str_num in one_list[0:3]]
                     one_point['init_state'] = int(one_list[7])
-<<<<<<< HEAD
                     one_point['no'] = int(one_list[6])
-=======
-
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
                     one_point['obs'] = []
                     for str in one_list[8:-1]:
                         one_point['obs'].append(int(str))
                     one_point['obs'].append(int(one_list[-1][0]))
                     same_times_obs.append(one_point)
             self.down_points_dir[len(one_list)-4] = same_times_obs
-<<<<<<< HEAD
         print('length is {}'.format(len(self.down_points_dir)))
         print('sample like {}'.format(self.down_points_dir[10][1]))
-=======
-        print('length is {}'.format(self.down_points_dir[10][1]))
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
 
     def obs_downtimes_points_list(self, obs_time):
         """
         [{'xyz': [4.29805, 1.79933, 0.800642], 'obs': [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}, ...]
         所有点观测n次以内
-<<<<<<< HEAD
         output:
         [xyz, no, label, obs]
-=======
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
         """
         point_cloud = []
         for key, value in self.down_points_dir.items():
             for p in value:
                 one_point = p['xyz']
-<<<<<<< HEAD
                 one_point.append(p['no'])
                 one_point.append(p['init_state'])
                 if len(p['obs']) > obs_time:
@@ -87,11 +72,6 @@ class PointDataLoader:
                     one_point = one_point + p['obs']
                 point_cloud.append(one_point)
         print('length is {}'.format(len(point_cloud)))
-=======
-                one_point.append(p['init_state'])
-                one_point = one_point + p['obs'][:obs_time]
-                point_cloud.append(one_point)
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
         return point_cloud
 
     def read_txt_list_rgbpoints(self):
@@ -106,11 +86,7 @@ class PointDataLoader:
                 points.append(one_point)
         return points
 
-<<<<<<< HEAD
     def read_txt_list_points(self, down_time=0, upper_times=None):
-=======
-    def read_txt_list_points(self, obs_time=0):
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
         """ xyz, first label, obs """
         points = []
         with open(self.txt_path, 'r') as f:
@@ -118,7 +94,6 @@ class PointDataLoader:
             print("we got {} points".format(len(lines)))
             for line in lines:
                 one_list = line.split(', ')
-<<<<<<< HEAD
                 if down_time != 0 and (len(one_list) - 8)<=down_time:
                     continue
                 one_point = [float(str_num) for str_num in one_list[0:3]]
@@ -130,23 +105,11 @@ class PointDataLoader:
                     for str in one_list[8:-1]:
                         one_point.append(int(str))
                     one_point.append(int(one_list[-1][0]))
-=======
-                if obs_time != 0 and (len(one_list)-8)>=obs_time:
-                    continue
-                one_point = [float(str_num) for str_num in one_list[0:3]]
-                one_point.append(int(one_list[7]))
-                for str in one_list[8:-1]:
-                    one_point.append(int(str))
-                one_point.append(int(one_list[-1][0]))
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
                 points.append(one_point)
         return points
 
     def read_txt_dirpoints(self):
-<<<<<<< HEAD
         """  """
-=======
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
         points = {}
         with open(self.txt_path, 'r') as f:
             lines = f.readlines()
@@ -197,7 +160,6 @@ def pcd_generate(points, save_path, name):
     pcd.generate(save_path, name)
 
 
-<<<<<<< HEAD
 def save_point_list2txt(points_list, save_path):
     file = os.path.join(save_path)
     if not os.path.exists(save_path):
@@ -214,23 +176,13 @@ def save_point_list2txt(points_list, save_path):
 
 if __name__ == "__main__":
     # read_tool = PointDataLoader("/home/zlh/data/sandpile_source/data/test1/pixel4_r3live/bag5.txt")
-=======
-if __name__ == "__main__":
-    read_tool = PointDataLoader("/home/zlh/bag12.txt")
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
     # 生成降采样的点云文件
     # origin_point = read_txt_dirpoints("/home/zlh/bag12.txt")
     # down_sample(origin_point, 0.1, "/media/zlh/01839234-e52a-4a95-a67c-d336293595a8/zzh/data/test3/r3live_4pixel/sample_bag12")
     # 生成pcd文件
 
-<<<<<<< HEAD
     # 原始点到pcd
     read_tool = PointDataLoader("/home/zlh/data/sandpile_source/data/test1/pixel4_r3live/bag6.txt")
     xyzrgb = read_tool.read_txt_list_rgbpoints()
     print(xyzrgb[5])
     pcd_generate(xyzrgb, '/home/zlh/data/sandpile_source/data/test1/origin_pcd_for_label', 'origin6')
-=======
-    xyzrgb = read_tool.read_txt_list_rgbpoints()
-    print(xyzrgb[5])
-    pcd_generate(xyzrgb, '/home/zlh', 'origin12')
->>>>>>> ca18b6b220a5d26a186b74faaf0eccfe6e0fb9ff
