@@ -100,7 +100,7 @@ class PointSegEvaluation:
             count[self.num_class * truth_label + filtered_label] += 1
 
         confusion_matrix = count.reshape(self.num_class, self.num_class)
-        acc, iou_list = evaluation(confusion_matrix)
+        acc, iou_list = _evaluation(confusion_matrix)
         eval_out = [acc] + iou_list
 
         one_line = str(1) + ", " + str(point_count)
@@ -136,7 +136,7 @@ def hmm_eval_less_times(point_list, time, num_class, save_path):
         count[num_class * truth_label + filtered_label] += 1
 
     confusion_matrix = count.reshape(num_class, num_class)
-    acc, iou_list = evaluation(confusion_matrix)
+    acc, iou_list = _evaluation(confusion_matrix)
     eval_out = [acc] + iou_list
 
     one_line = str(time) + ", " + str(point_count)
@@ -172,7 +172,7 @@ def hmm_eval_one_times(data_dir, time, num_class, save_path):
                 count[num_class * truth_label + filtered_label] += 1
 
     confusion_matrix = count.reshape(num_class, num_class)
-    acc, iou_list = evaluation(confusion_matrix)
+    acc, iou_list = _evaluation(confusion_matrix)
     eval_out = [acc] + iou_list
 
     one_line = str(time) + ", " + str(point_count)
@@ -186,7 +186,7 @@ def hmm_eval_one_times(data_dir, time, num_class, save_path):
     return eval_out, one_line
 
 
-def evaluation(confusion_matrix):
+def _evaluation(confusion_matrix):
     acc = np.diag(confusion_matrix).sum() / confusion_matrix.sum()
     MIoU = np.diag(confusion_matrix) / (
             np.sum(confusion_matrix, axis=1) + np.sum(confusion_matrix, axis=0) -

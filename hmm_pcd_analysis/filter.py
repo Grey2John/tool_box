@@ -75,20 +75,20 @@ class PointHMM:
 
 class LabelPCD:
     def __init__(self, point_cloud):
-        """ point_could list x,y,z,label """
+        """ point_could list [x,y,z,label]"""
         self.device = o3d.core.Device("CPU:0")
         self.dtype = o3d.core.float32
         self.pcd = o3d.t.geometry.PointCloud(self.device)
 
         self.points_array = np.array(point_cloud)
-        self.points_label_array = [l[3] for l in point_cloud]
+        self.points_label_list = [l[3] for l in point_cloud]
         self.color = np.zeros((self.points_array.shape[0], 3))
 
         self.color_render()
 
     def color_render(self):
         for i in range(self.points_array.shape[0]):
-            self.color[i, :] = label_rgb[self.points_label_array[i], :]
+            self.color[i, :] = label_rgb[self.points_label_list[i], :]
 
     def generate(self, save_path, name):
         self.pcd.point.positions = o3d.core.Tensor(self.points_array[:, 0:3], self.dtype, self.device)
@@ -114,7 +114,9 @@ def one_obs_txt2pcd(txt_dir, save_path):
 class PointList2RGBPCD:
     """ 生成rbg的pcd """
     def __init__(self, point_cloud):
-        """ point_could list x,y,z,rgb(0~255), array"""
+        """
+        point_could list x,y,z,rgb(0~255), array
+        """
         self.device = o3d.core.Device("CPU:0")
         self.dtype = o3d.core.float32
         self.pcd = o3d.t.geometry.PointCloud(self.device)
@@ -122,10 +124,10 @@ class PointList2RGBPCD:
         self.points_array = self.point_cloud_array[:, 0:3]
 
         color = np.zeros((self.points_array.shape[0], 3))
-        color[:, 0] = self.point_cloud_array[:, 5]
+        color[:, 0] = self.point_cloud_array[:, 5]   # 这里的顺序反过来的
         color[:, 1] = self.point_cloud_array[:, 4]
         color[:, 2] = self.point_cloud_array[:, 3]
-        self.color = np.divide(color, 255)
+        self.color = np.divide(color, 255)  # (0~1)
 
     def generate(self, save_path, name):
         self.pcd.point.positions = o3d.core.Tensor(self.points_array, self.dtype, self.device)
@@ -133,7 +135,7 @@ class PointList2RGBPCD:
 
         save_file = os.path.join(save_path, '{}.pcd'.format(name))
         print("save path is {}".format(save_file))
-        o3d.t.io.write_point_cloud(save_file, self.pcd, write_ascii=False)
+        o3d.t.io.write_point_cloud(save_file, self.pcd, write_ascii=False)  # ascii **
 
 
 def get_pic(pcd_path, save_path, name):
@@ -213,14 +215,14 @@ def gamma(alpha, beta, t, i, N):
 if __name__ == "__main__":
     # 生成过滤和非过滤的pcd对比文件
     obs_time = 12
-    down_txt_path = 'F:\earth_rosbag\data\\test3\\r3live_4pixel\\bag1.txt'
-    save_path = 'F:\earth_rosbag\data\\test3\\filter_pcd'
+    down_txt_path = '/media/zlh/zhang/earth_rosbag/data/test4/pixel4/10.txt'
+    save_path = '/media/zlh/zhang/earth_rosbag/data/test4/pcd'
     data = DL.PointDataLoader(down_txt_path)
-    points_in = data.read_txt_list_points(obs_time, 46)
-    txt_HMM_pcd(points_in, save_path, "filter1")
+    points_in = data.read_txt_list_points(obs_time, 100)
+    txt_HMM_pcd(points_in, save_path, "filter10")
     points_out = [row[:4] for row in points_in]
     one_obs_pcd = LabelPCD( points_out )
-    one_obs_pcd.generate(save_path, "non_filter1") # 观察一次的
+    one_obs_pcd.generate(save_path, "non_filter10") # 观察一次的
 
     # save pic
     # pcd_path = os.path.join("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time)+".pcd")
