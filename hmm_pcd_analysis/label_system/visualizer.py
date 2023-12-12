@@ -5,7 +5,7 @@ import open3d as o3d
 import numpy as np
 from filter import PointList2RGBPCD as P2pcd
 
-label_rgb = [[255, 0, 0],[0, 255, 0],[0, 0, 255],   # 0, 1, 2
+label_rgb = [[ 255, 0, 0],[0, 255, 0],[0, 0, 255],   # 0, 1, 2
              [255, 0, 255],[255, 255, 0],[0, 0, 0],   # 3, 4, 5
              [0, 255, 255]]   # 6
 # label_rgb = [[0, 0, 255],[0, 0, 255],[0, 0, 255],   # 0, 1, 2
@@ -14,14 +14,16 @@ label_rgb = [[255, 0, 0],[0, 255, 0],[0, 0, 255],   # 0, 1, 2
 
 
 class Visualize:
+    """单帧的图像的观测值的pcd"""
     def __init__(self, point_list, point_dic):
-        self.point_list = point_list
+        self.point_list = point_list  #
         self.point_dic = point_dic
 
-    def save_pcd_one_obs(self, sava_path):
-        for k, v in self.point_dic.items():
+    def save_pcd_one_obs(self, save_path):
+        points_k = sorted(self.point_dic.keys())
+        for k in points_k:
             one_pcd_point = []
-            for i in v:
+            for i in self.point_dic[k]:
                 one_point = self.point_list[i][0:3]
                 obs_index = 2
                 for l in range(int(len(self.point_list[i][8:])/2)):
@@ -32,7 +34,7 @@ class Visualize:
                 one_point = one_point + color
                 one_pcd_point.append(one_point)
             save_class = P2pcd(one_pcd_point)
-            save_class.generate(sava_path, str(k))
+            save_class.generate(save_path, str(k))
 
 
 class OutlierFilter:
@@ -45,8 +47,10 @@ class OutlierFilter:
 
 
 if __name__ == "__main__":
-    read_tool = PointDataLoader("F:\earth_rosbag\data\\test3\obs_times_txt\\bag11.txt")
+    read_tool = PointDataLoader("/media/zlh/zhang/dataset/outline_seg_slam/test1/pt_obs.txt")
     point, point_index = read_tool.read_txt_dic_points_with_obs_times()
     vpcd = Visualize(point, point_index)
-    save_path = 'F:\earth_rosbag\data\\test3\obs_times_txt\\bag11'
+    save_path = '/media/zlh/zhang/dataset/outline_seg_slam/test1/origin_pcd'
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
     vpcd.save_pcd_one_obs(save_path)
