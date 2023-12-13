@@ -65,6 +65,7 @@ class ClusterSegmentSystem:
         for one frame of image
         Go through all key grid to find crack
         """
+        """find the crack place, described by a seed of key grid"""
         crack_key_grid_index = {3:[], 4:[], 5:[]}
         for c in range(3, 6):  # key class 3, 4, 5
             temp_class_mix = np.zeros(7, dtype=np.int8)  # class statics
