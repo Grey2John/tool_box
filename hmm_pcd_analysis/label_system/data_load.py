@@ -3,6 +3,8 @@ import sys
 import time
 import numpy as np
 import cv2
+import json
+import matplotlib.pyplot as plt
 from scipy.sparse import coo_matrix
 from scipy.spatial.transform import Rotation
 
@@ -53,12 +55,12 @@ class OutlineDataLoader:
         if not os.path.exists(self.obs_txt_path):
             return False
         points = PointDataLoader(self.obs_txt_path)
-        _point_list_source, _points_frame_dic = points.read_txt_dic_points_with_obs_times()
-        for p in _point_list_source:
+        self._point_list_source, self._points_frame_dic = points.read_txt_dic_points_with_obs_times()
+        for p in self._point_list_source:
             one_point = Point(p[0:3], filter_init)
             self.image_pose_dic.point_list_lib.append(one_point)
 
-        for frame, dic in _points_frame_dic.items():
+        for frame, dic in self._points_frame_dic.items():
             if frame in self.image_pose_dic.image_dic.keys():
                 self.image_pose_dic.image_dic[frame].point_index_list = dic
 
@@ -119,3 +121,81 @@ class OutlineDataLoader:
         self.image_file_read()
         self.point_read()
         return self.image_pose_dic
+
+
+def save_frame_data_json(workspace, frame_list):
+    """ pick one frame out
+    input: frame list [20, 124, 122]
+    save: point list, mask, pose_r, pose_t,
+    save type: json
+    """
+    save_dir = os.path.join(work_space, "one_frame")
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    if not isinstance(frame_list, list):
+        frame_list = [frame_list]
+    data = OutlineDataLoader(workspace)
+    data.data_out_put()
+    for f in frame_list:
+        if f not in data.image_pose_dic.image_dic.keys():
+            print("{} is not in the frame list".format(f))
+            continue
+        json_path = os.path.join(save_dir, "{}.json".format(f))
+        mask = data.image_pose_dic.image_dic[f].mask.tolist()
+        pose_r = data.image_pose_dic.image_dic[f].pose_r.tolist()
+        pose_t = data.image_pose_dic.image_dic[f].pose_t.tolist()
+        cam_k_ = data.image_pose_dic.image_dic[f].cam_k.tolist()
+        cam_k = [cam_k_[0][0], cam_k_[1][1], cam_k_[0][2], cam_k_[1][2]]
+        one_frame_json = {"point_list": None,
+                          "mask": mask,
+                          "pose_r": pose_r,
+                          "pose_t": pose_t,
+                          "cam_k": cam_k
+                          }
+        points = []
+        for p_index in data.image_pose_dic.image_dic[f].point_index_list:
+            xyz = data.image_pose_dic.point_list_lib[p_index].coordinate.tolist()
+            origin_point_list = data._point_list_source[p_index]
+            for l in range(int(len(origin_point_list[8:]) / 2)):
+                if int(origin_point_list[8 + 2 * l + 1]) == f:
+                    obs_index = 8 + 2 * l
+                    break
+            xyz.append(origin_point_list[obs_index])
+            points.append(xyz)
+        one_frame_json['point_list'] = points
+        with open(json_path, 'w') as ff:
+            json.dump(one_frame_json, ff)
+            # json.dump(one_frame_json, ff, indent=4)
+        print("save the file: {}".format(json_path))
+
+
+def read_one_frame_data_json(json_path):
+    with open(json_path, 'r') as ff:
+        one_frame_json = json.load(ff)
+
+    frame_num = int(json_path.split("/")[-1].split(".")[0])
+    point_list = []
+    point_origin_state = []
+    for p in one_frame_json["point_list"]:
+        one_point = Point(p[0:3], filter_init)
+        point_list.append(one_point)
+        point_origin_state.append(p)
+
+    mask = np.array(one_frame_json["mask"])
+    pose_r = np.array(one_frame_json["pose_r"])
+    pose_t = np.array(one_frame_json["pose_t"])
+    cam_k = one_frame_json["cam_k"]
+    image_pose = ImagePose(mask, frame_num, pose_r, pose_t, cam_k, None)
+    return image_pose, point_list, point_origin_state
+
+
+if __name__ == "__main__":
+    work_space = "/media/zlh/zhang/dataset/outline_seg_slam/test1"
+    save_frame_data_json(work_space, [15, 30, 60, 80])
+
+    obj, points, point_origin_state = read_one_frame_data_json("/media/zlh/zhang/dataset/outline_seg_slam/test1/one_frame/30.json")
+    image_visual = obj.mask
+    plt.imshow(image_visual)
+    plt.draw()  # 绘制图像
+    plt.waitforbuttonpress()

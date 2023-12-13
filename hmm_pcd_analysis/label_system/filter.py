@@ -18,9 +18,12 @@ emissionprob = np.array([[0.9974, 0.00039, 0.0000017, 0.00118, 0.00102, 0,	0],
 #                       [0.32442, 0.6175, 0.00679, 0.03402, 0.00429, 0.0033, 0.00969],
 #                       [0.45914, 0.02241, 0.47941, 0.01243, 0.02132, 0.00137, 0.00392]]) # matlab
 
-label_rgb = np.array([[0, 0.5, 1],   # none
-                     [1, 0, 0],   # rock
-                     [0, 1, 0]])   # sand
+# label_rgb = np.array([[0, 0.5, 1],   # none
+#                         [1, 0, 0],   # rock
+#                         [0, 1, 0]])   # sand
+label_rgb = np.array([[0, 0, 255],[0, 255, 0],[255, 0, 0],   # 0, 1, 2
+             [255, 0, 255],[0, 255, 255], [0, 0, 0],   # 3, 4, 5
+             [255, 255, 0]])   # 6
 
 
 class PointHMM:
@@ -88,7 +91,7 @@ class LabelPCD:
 
     def color_render(self):
         for i in range(self.points_array.shape[0]):
-            self.color[i, :] = label_rgb[self.points_label_list[i], :]
+            self.color[i, :] = label_rgb[self.points_label_list[i], :]/255
 
     def generate(self, save_path, name):
         self.pcd.point.positions = o3d.core.Tensor(self.points_array[:, 0:3], self.dtype, self.device)

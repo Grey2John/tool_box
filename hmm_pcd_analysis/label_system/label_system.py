@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 from cluster_seg import ClusterSegmentSystem
 from filter import PointList2RGBPCD as P2pcd
+from filter import LabelPCD
 """
 整个观测系统的程序
 loading data
@@ -86,12 +87,14 @@ class ImagePose:
 
 
 class ImagePoseDic:
-    """multi image for a camera"""
+    """multi image from camera
+    multi cluster
+    """
     def __init__(self, _intrinsic_scale):
         self.intrinsic_scale = _intrinsic_scale
         self.image_dic = {}  # {frame_id: ImagePose}
         self.point_list_lib = []  # [xyz, p0p1p2-hmm, obs_state]
-        self.one_CSS = None  # clustering
+        self.one_CSS = None  # clustering class for one frame
 
         self.seq2num = {}   # to find the observing number
 
@@ -102,7 +105,7 @@ class ImagePoseDic:
         proj_state_count = 0
         for index_p in self.image_dic[frame].point_index_list:  # every point in each frame
             if self.point_list_lib[index_p].if_obs:
-                xy, depth_c = project_3d_point_in_img(self.point_list_lib[index_p].coordinate,
+                xy, xyz_c = project_3d_point_in_img(self.point_list_lib[index_p].coordinate,
                                                       self.image_dic[frame].cam_k,
                                                       self.image_dic[frame].pose_r,
                                                       self.image_dic[frame].pose_t)
@@ -113,27 +116,11 @@ class ImagePoseDic:
                 self.point_list_lib[index_p].update_tims()
                 xy_int = np.round(xy).astype(int)
                 obs_state = self.image_dic[frame].observe_state(xy_int[1], xy_int[0])  # observing state [y, x]
-                # 先y后x，这是因为在NumPy中，数组的第一个索引对应于行，第二个索引对应于列
+                # 先y后x，这是因为在NumPy中，数组的第一个索引对应于行，第二个索引对应于列]
                 self.point_list_lib[index_p].obs_state = obs_state  # point state from first obs
-                down_xy = np.round(xy * scale_factor).astype(int)
-                self.one_CSS.grid_map_update(index_p, down_xy, obs_state, depth_c)
+                self.one_CSS.grid_map_update(index_p, obs_state, xy, xyz_c)
 
         print("the number of project points is {}".format(proj_state_count))
-
-    def one_frame_pcd_generate(self, frame, save_path):
-        non_filter_name = "cluster_{}".format(frame)
-        points_obs = []  # [ [xyz, rgb] ]
-        for index_p in self.image_dic[frame].point_index_list:
-            state = self.point_list_lib[index_p].obs_state
-            if state is not None:
-                one_point = self.point_list_lib[index_p].coordinate.tolist()
-                color = label_rgb[state]
-                one_p = one_point + color
-
-                points_obs.append(one_p)
-        save_class = P2pcd(points_obs)
-        save_class.generate(save_path, non_filter_name)
-        print("generate the {}".format(non_filter_name))
 
     def point_state_optim(self, fix_dic):
         for k, v in fix_dic.items():
@@ -144,44 +131,79 @@ class ImagePoseDic:
             for i in v:
                 self.point_list_lib[i].obs_state = state
 
+    def one_frame_pcd_data_generate(self, f):
+        points_obs = []
+        for index_p in self.image_dic[f].point_index_list:
+            state = self.point_list_lib[index_p].obs_state
+            if state is not None:
+                one_point = self.point_list_lib[index_p].coordinate.tolist()
+                color = label_rgb[state]
+                one_p = one_point + color
+                points_obs.append(one_p)
+        return points_obs
+
     def process(self, save_path):
         """main function to process every image"""
         frame_list = sorted(self.image_dic.keys())
         for f in frame_list:
             print("\033[32m===== image No. is {} =====\033[0m".format(f))
             start_time = time.time()
-            self.one_CSS = ClusterSegmentSystem()  # init
+            self.one_CSS = ClusterSegmentSystem(self.image_dic[f].mask)  # init  self.image_dic[f].mask
             self.project_3Dpoints_and_grid_build(f)
             self.one_CSS.crack_detect()
             state_change_dic = self.one_CSS.cluster_process()
             self.point_state_optim(state_change_dic)  # fix point state
             print("frame {} cost {} s".format(f, (time.time() - start_time)))
             cpd_start_time = time.time()
-            self.one_frame_pcd_generate(f, save_path)
+
+            points_obs = self.one_frame_pcd_data_generate(f)
+            pcd_generate(points_obs, f, save_path, "cluster_")
             print("pcd generate {} cost {} s".format(f, (time.time() - cpd_start_time)))
-            self.visualizer(f)
+            # image_visual = self.image_dic[frame].mask
+            image_visual = self.one_CSS.exist_map
+            # process_visualizer(image_visual)
             # user_input = input("按下N键进入下一个循环，按下其他键退出：")
             # if user_input.lower() != 'n':
             #     break
 
-    def visualizer(self, frame):
-        # image_visual = self.image_dic[frame].mask
-        image_visual = self.one_CSS.exist_map
-        plt.imshow(image_visual)
-        plt.draw()  # 绘制图像
-        plt.pause(0.05)
+
+def pcd_generate(points_obs, frame, save_path, prefix=None):
+    # points_obs [xyz, rgb]
+    non_filter_name = "{}{}".format(prefix, frame)
+    save_class = P2pcd(points_obs)
+    save_class.generate(save_path, non_filter_name)
+    print("generate the {}".format(non_filter_name))
+
+
+def process_visualizer(image_visual):
+    plt.imshow(image_visual)
+    plt.draw()  # 绘制图像
+    plt.pause(0.05)
 
 
 def project_3d_point_in_img(xyz, K, pose_r, pose_t):
     # xyz_1 = np.append(xyz, 1)
     camera_point = np.dot(pose_r, xyz) + pose_t
-    depth = camera_point[-1]
+    # depth = camera_point[-1]
     # if depth < 0.001:
     #     return False, False
     image_xy = np.dot(K, camera_point)
     u_v = image_xy[:2] / image_xy[2]  # [x, y] [heng, zong] [w, h] [col, row]
     cut_uv = u_v-np.array([160, 0])
     if 2 <= cut_uv[0] < 958 and 2 <= cut_uv[1] < 718:  # available observing region
-        return cut_uv, depth  # not Rounding for keeping accuracy
+        return cut_uv, camera_point  # not Rounding for keeping accuracy
     else:
         return False, False
+
+
+def one_frame_task(image_pose, points, frame, point_origin_state, save_path, scale_factor=0.25):
+    IPD = ImagePoseDic(1.0)
+    IPD.add_image_frame(image_pose)
+    IPD.point_list_lib = points
+    IPD.image_dic[frame].point_index_list = list(range(len(points)))
+    # start
+    IPD.process(save_path)
+    pcd = LabelPCD(point_origin_state)
+    pcd.generate(save_path, str(frame))
+
+
