@@ -77,8 +77,8 @@ if __name__ == "__main__":
     2. pcd after filter
     3. pcd non_filter, first obs
     """
-    save_path = '/media/zlh/zhang/earth_rosbag/data/test5_change/pcd'
-    txt_dir_path = "/media/zlh/zhang/earth_rosbag/data/test5_change/pixel4"
+    save_path = '/media/zlh/zhang/earth_rosbag/data/test4/bag_list/bag0'
+    txt_dir_path = "/media/zlh/zhang/earth_rosbag/data/test4/bag_list/bag0"
     txt_file_list = file_read.dir_multi_file(txt_dir_path, "txt")
     # 任务分配
     for task in txt_file_list:

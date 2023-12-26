@@ -32,5 +32,5 @@ def rosbag_rgba_to_image(bag, save_path, rgb_name="rgb", mask_name="mask"):
 
 
 if __name__ == "__main__":
-    rosbag_rgba_to_image('/media/zlh/zhang/dataset/outline_seg_slam/test1/yolo.bag',
-                         '/media/zlh/zhang/dataset/outline_seg_slam/test1')
+    rosbag_rgba_to_image('/media/zlh/zhang/dataset/outline_seg_slam/bag2/yolo.bag',
+                         '/media/zlh/zhang/dataset/outline_seg_slam/bag2')

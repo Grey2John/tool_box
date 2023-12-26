@@ -23,6 +23,7 @@ point_templet = {
 
 class PointDataLoader:
     def __init__(self, txt_path):
+        """读txt点观测文件，也可以读所在的文件夹"""
         self.txt_path = txt_path
         if not os.path.isfile(txt_path):
             self.file_list = os.listdir(txt_path)
@@ -35,7 +36,7 @@ class PointDataLoader:
         for l in self.file_list:
             file = os.path.join(self.txt_path, l)
             # print("process {}".format(file))
-            same_times_obs = []
+            same_times_obs_p = []
             with open(file, 'r') as f:
                 lines = f.readlines()
                 for line in lines:
@@ -48,8 +49,8 @@ class PointDataLoader:
                     for str in one_list[8:-1]:
                         one_point['obs'].append(int(str))
                     one_point['obs'].append(int(one_list[-1][0]))
-                    same_times_obs.append(one_point)
-            self.down_points_dir[len(one_list)-4] = same_times_obs
+                    same_times_obs_p.append(one_point)
+            self.down_points_dir[len(one_point['obs'])] = same_times_obs_p
         print('length is {}'.format(len(self.down_points_dir)))
         print('sample like {}'.format(self.down_points_dir[10][1]))
 
@@ -63,7 +64,8 @@ class PointDataLoader:
         point_cloud = []
         for key, value in self.down_points_dir.items():
             for p in value:
-                one_point = p['xyz']
+                one_point = []
+                one_point += p['xyz']
                 one_point.append(p['no'])
                 one_point.append(p['init_state'])
                 if len(p['obs']) > obs_time:
@@ -72,7 +74,7 @@ class PointDataLoader:
                     one_point = one_point + p['obs']
                 point_cloud.append(one_point)
         print('length is {}'.format(len(point_cloud)))
-        return point_cloud
+        return point_cloud  # [xyz, no, first label, obs]
 
     def read_txt_list_rgbpoints(self):
         """ xyz, rgb """
@@ -86,26 +88,34 @@ class PointDataLoader:
                 points.append(one_point)
         return points
 
-    def read_txt_list_points(self, down_time=0, upper_times=None):
-        """ xyz, first label, obs """
+    def read_txt_list_points(self, have_obs_time=True, min_time=0, upper_times=None):
+        """output: xyz, first label, obs """
+        """更具txt格式修改把"""
         points = []
         with open(self.txt_path, 'r') as f:
             lines = f.readlines()
-            print("we got {} points".format(len(lines)))
             for line in lines:
                 one_list = line.split(', ')
-                if down_time != 0 and (len(one_list) - 8)<=down_time:
-                    continue
-                one_point = [float(str_num) for str_num in one_list[0:3]]
-                one_point.append(int(one_list[7]))
-                if len(one_list[8:])>upper_times:
-                    for str in one_list[8:upper_times+8]:
-                        one_point.append(int(str))
+                one_point = []
+                one_point += [float(str_num) for str_num in one_list[0:3]]  # xyz
+                one_point.append(int(one_list[7]))  # first label
+                # obs list
+                obs_time_count = 0
+                if have_obs_time:  # 有观察次数
+                    for i in range(int(len(one_list[8:])/2)):
+                        one_point.append(int(one_list[8+i*2]))
+                        obs_time_count += 1
+                        if obs_time_count > upper_times:
+                            break
                 else:
-                    for str in one_list[8:-1]:
-                        one_point.append(int(str))
-                    one_point.append(int(one_list[-1][0]))
-                points.append(one_point)
+                    for i in range(int(len(one_list[8:]))):
+                        one_point.append(int(one_list[8 + i]))
+                        obs_time_count += 1
+                        if obs_time_count > upper_times:
+                            break
+                if obs_time_count >= min_time or min_time == 0:
+                    points.append(one_point)
+        print("we got {} points".format(len(points)))
         return points
 
     def read_txt_dirpoints(self):

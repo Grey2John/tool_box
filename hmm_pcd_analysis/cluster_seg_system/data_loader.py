@@ -129,7 +129,7 @@ class PointDataLoader:
                 else:
                     points[obs_num] = [point]
 
-        print('length is {}'.format( len(points.keys())) )
+        print( 'length is {}'.format( len(points.keys()) ) )
         print(points[10][1])
         return points
 

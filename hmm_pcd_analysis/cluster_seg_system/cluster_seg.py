@@ -205,7 +205,7 @@ class ClusterSegmentSystem:
         axes[0, 0].imshow(self.exist_map)  # cmap='gray'表示使用灰度颜色映射
         axes[0, 0].set_title('exist map')
 
-        axes[0, 1].imshow(self.mask + resize_image(need_cluster_grid_map, 4))
+        axes[0, 1].imshow(self.mask + resize_image(need_cluster_grid_map, int(1/self.scale_factor)))
         axes[0, 1].set_title('crack key grid')
 
         # axes[1, 0].imshow(self.grid_point_num)

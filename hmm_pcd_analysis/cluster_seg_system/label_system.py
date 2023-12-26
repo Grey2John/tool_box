@@ -41,10 +41,11 @@ label_rgb = [[255, 0, 0],[0, 255, 0],[0, 0, 255],   # 0, 1, 2
 
 
 class Point:
-    def __init__(self, xyz, hmm):
+    def __init__(self, xyz, hmm, annotated_label=None):
         self.coordinate = np.array(xyz)
         self.filter_prob = np.array(hmm)
         self.obs_state = None
+        self.truth_label = annotated_label
         self.if_obs = True
         self.obs_times = 0
 
@@ -93,7 +94,7 @@ class ImagePoseDic:
     def __init__(self, _intrinsic_scale):
         self.intrinsic_scale = _intrinsic_scale
         self.image_dic = {}  # {frame_id: ImagePose}
-        self.point_list_lib = []  # [xyz, p0p1p2-hmm, obs_state]
+        self.point_list_lib = []  # [xyz, p0p1p2-hmm, obs_state] Class Point
         self.one_CSS = None  # clustering class for one frame
 
         self.seq2num = {}   # to find the observing number
@@ -197,13 +198,12 @@ def project_3d_point_in_img(xyz, K, pose_r, pose_t):
 
 
 def one_frame_task(image_pose, points, frame, point_origin_state, save_path, scale_factor=0.25):
+    """one frame task"""
     IPD = ImagePoseDic(1.0)
     IPD.add_image_frame(image_pose)
     IPD.point_list_lib = points
     IPD.image_dic[frame].point_index_list = list(range(len(points)))
     # start
     IPD.process(save_path)
-    pcd = LabelPCD(point_origin_state)
+    pcd = LabelPCD(point_origin_state)  # origin pcd
     pcd.generate(save_path, str(frame))
-
-

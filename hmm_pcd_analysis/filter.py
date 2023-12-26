@@ -8,15 +8,23 @@ import data_loader as DL
 startprob = np.array([[0.4, 0.3, 0.3],   # none
                      [0.4, 0.3, 0.3],   # rock
                      [0.4, 0.3, 0.3]])   # sand
-transmat = np.array([[0.985,	0.009,	0.0063],
-                    [0.02845,	0.9711,	0.0004],
-                    [0.0092,	0.0005,	0.9903]])
-emissionprob = np.array([[0.9974, 0.00039, 0.0000017, 0.00118, 0.00102, 0,	0],
-                      [0.12693,	0.75310, 0.000039, 0.11413, 0.00042, 0.00291, 0.00246],
-                      [0.02638,	0.0004477, 0.78807, 0.00094, 0.1532, 0.00963, 0.02133]]) # matlab
-# emissionprob = np.array([[0.9547,  0.0093,  0.00722, 0.0197,  0.00879, 0.00003, 0.00026],
-#                       [0.32442, 0.6175, 0.00679, 0.03402, 0.00429, 0.0033, 0.00969],
-#                       [0.45914, 0.02241, 0.47941, 0.01243, 0.02132, 0.00137, 0.00392]]) # matlab
+# transmat = np.array([[0.985,	0.009,	0.0063],
+#                     [0.02845,	0.9711,	0.0004],
+#                     [0.0092,	0.0005,	0.9903]])
+
+transmat = np.array([[1, 0,	0],
+                    [0,	1,	0],
+                    [0,	0, 1]])
+# emissionprob = np.array([[0.9974, 0.00039, 0.0000017, 0.00118, 0.00102, 0,	0],
+#                       [0.12693,	0.75310, 0.000039, 0.11413, 0.00042, 0.00291, 0.00246],
+#                       [0.02638,	0.0004477, 0.78807, 0.00094, 0.1532, 0.00963, 0.02133]]) # matlab
+emissionprob = np.array([[0.8547,  0.0093,  0.00722, 0.0697,  0.05879, 0.00003, 0.00026],
+                      [0.32442, 0.6175, 0.00679, 0.03402, 0.00429, 0.0033, 0.00969],
+                      [0.45914, 0.02241, 0.47941, 0.01243, 0.02132, 0.00137, 0.00392]])  # good
+
+# emissionprob = np.array([[0.8547,  0.0093,  0.00722, 0.0697,  0.05879, 0.00003, 0.00026],
+#                       [0.20442, 0.7175, 0.00679, 0.05402, 0.00429, 0.0033, 0.00969],
+#                       [0.10914, 0.02241, 0.77941, 0.02243, 0.06132, 0.00137, 0.00392]]) # matlab
 
 label_rgb = np.array([[0, 0.5, 1],   # none
                      [1, 0, 0],   # rock
@@ -214,15 +222,16 @@ def gamma(alpha, beta, t, i, N):
 
 if __name__ == "__main__":
     # 生成过滤和非过滤的pcd对比文件
+    bag_name = "1"
     obs_time = 12
-    down_txt_path = '/media/zlh/zhang/earth_rosbag/data/test4/pixel4/10.txt'
-    save_path = '/media/zlh/zhang/earth_rosbag/data/test4/pcd'
+    down_txt_path = 'F:\earth_rosbag\data\\test3\\r3live_4pixel\\bag1.txt'.format(bag_name)
+    save_path = 'F:\earth_rosbag\data\\test3\\filter_pcd'.format(bag_name)
     data = DL.PointDataLoader(down_txt_path)
-    points_in = data.read_txt_list_points(obs_time, 100)
-    txt_HMM_pcd(points_in, save_path, "filter10")
+    points_in = data.read_txt_list_points(have_obs_time=False, min_time=0, upper_times=50)
+    txt_HMM_pcd(points_in, save_path, "filter{}".format(bag_name))
     points_out = [row[:4] for row in points_in]
     one_obs_pcd = LabelPCD( points_out )
-    one_obs_pcd.generate(save_path, "non_filter10") # 观察一次的
+    one_obs_pcd.generate(save_path, "non_filter{}".format(bag_name))  # 观察一次的
 
     # save pic
     # pcd_path = os.path.join("F:\earth_rosbag\\test_hmm\data\pcd", str(obs_time)+".pcd")
