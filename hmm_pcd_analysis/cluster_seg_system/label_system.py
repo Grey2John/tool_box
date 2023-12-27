@@ -200,9 +200,9 @@ def project_3d_point_in_img(xyz, K, pose_r, pose_t):
 def one_frame_task(image_pose, points, frame, point_origin_state, save_path, scale_factor=0.25):
     """one frame task"""
     IPD = ImagePoseDic(1.0)
-    IPD.add_image_frame(image_pose)
-    IPD.point_list_lib = points
-    IPD.image_dic[frame].point_index_list = list(range(len(points)))
+    IPD.add_image_frame(image_pose)  # image info
+    IPD.point_list_lib = points  # point info
+    IPD.image_dic[frame].point_index_list = list(range(len(points)))  # directly add point index
     # start
     IPD.process(save_path)
     pcd = LabelPCD(point_origin_state)  # origin pcd

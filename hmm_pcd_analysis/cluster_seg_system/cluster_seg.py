@@ -7,6 +7,8 @@ from scipy.spatial.distance import squareform
 from visualizer import edge_mask, resize_image
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from kdtree import KDTree
+
 
 mask_size = [720, 960]  # 矩阵是HxW
 state_standard = {
@@ -46,49 +48,48 @@ class ClusterSegmentSystem:
         self.grid_point_num[h, w] += 1
         if self.exist_map[h, w] == 0:  # new grid
             self.exist_map[h, w] = 1
-            self.index_map[h, w] = self.index_numer  #  从1开始索引 ###
+            self.index_map[h, w] = self.index_numer  # 从1开始索引
             self.index_numer += 1
 
             self.row_col.append([h, w])
             zero_list = [0, 0, 0, 0, 0, 0, 0]
             zero_list[one_point_obs] = 1
             self.class_list.append(zero_list)
-            new_grid = GridUnit(h, w)   # #######################################
+            new_grid = GridUnit(h, w)
             new_grid.adjust_grid(point_index, one_point_obs, xy, xyz_c)
             self.grid_list.append(new_grid)
         else:
             self.class_list[self.index_map[h, w]-1][one_point_obs] = 1
             self.grid_list[self.index_map[h, w]-1].adjust_grid(point_index, one_point_obs, xy, xyz_c)
 
-    def crack_detect(self, thread_hold=5):
+    def crack_detect(self, thread_hold=20):
         """
         for one frame of image
         Go through all key grid to find crack
         """
         """find the crack place, described by a seed of key grid"""
-        crack_key_grid_index = {3:[], 4:[], 5:[]}
+        crack_key_grid_index = {3: [], 4: [], 5: []}
         for c in range(3, 6):  # key class 3, 4, 5
-            temp_class_mix = np.zeros(7, dtype=np.int8)  # class statics
+            # temp_class_mix = np.zeros(7, dtype=np.int8)  # class statics
             for i, l in enumerate(self.class_list):  # i, l - grid index, one class_list, load all key grid
                 if l[c] != 1:
                     continue
+                kdtree_points_one_region = []
+
                 h = self.row_col[i][0]
                 w = self.row_col[i][1]
-                temp_grid_index, near_key_grid_index_list, \
-                    max_depth, min_depth, depth_xyz = self.near_grid(h, w, c)
+                temp_grid_index, near_key_grid_index_list = self.near_grid(h, w, c)
+                for g_index in temp_grid_index:
+                    for j, one_p in enumerate(self.grid_list[g_index].point_xyz2c):
+                        kdtree_point = one_p.tolist()  # [xyz] in camera
+                        kdtree_point.append(self.grid_list[g_index].point_index[j])  # index
+                        kdtree_points_one_region.append(kdtree_point)
 
-                max_d = max(max_depth)
-                min_d = min(min_depth)
-                pixel_length = np.linalg.norm(depth_xyz[max_depth.index(max_d) * 2][0:2] - \
-                                              depth_xyz[min_depth.index(min_d) * 2 + 1][0:2])
-                # print("pixel gap: {}".format(pixel_length))
-                # print("depth gap: {}".format(max_d - min_d))
-                gradient_depth = (max_d - min_d)/pixel_length
-                # print(gradient_depth)
-                if gradient_depth < thread_hold:  # gradient selection
-                    continue
-                self.crack_key_grid[h, w] = c  # crack_key_grid is the seed for generating the clustering region
-                crack_key_grid_index[c].append(self.index_map[h, w]-1)
+                one_tree = KDTree(kdtree_points_one_region)
+                if one_tree.crack_detect(thread_hold):
+                    crack_key_grid_index[c].append(self.index_map[h, w] - 1)
+                    # crack_key_grid is the seed for generating the clustering region
+                    self.crack_key_grid[h, w] = c
 
         """further more find the seg region, key grid directly linked to build cluster region"""
 
@@ -99,8 +100,7 @@ class ClusterSegmentSystem:
                 one_key_grid_seed = 0
                 h = self.row_col[g][0]
                 w = self.row_col[g][1]
-                temp_grid_index, near_key_grid_index_list, \
-                    max_depth, min_depth, depth_xyz = self.near_grid(h, w, c)
+                temp_grid_index, near_key_grid_index_list = self.near_grid(h, w, c)
                 key_grid_processed.append(g)
 
                 while continue_find:  # link to all the key grid
@@ -112,8 +112,7 @@ class ClusterSegmentSystem:
                     for g_index in rest_near_key_grid_index_list:
                         h = self.row_col[g_index][0]
                         w = self.row_col[g_index][1]
-                        _temp_grid_index, _near_key_grid_index_list, \
-                            _max_depth, _min_depth, _depth_xyz = self.near_grid(h, w, c)
+                        _temp_grid_index, _near_key_grid_index_list = self.near_grid(h, w, c)
 
                         key_grid_processed.append(g_index)  # add into processed group
                         temp_grid_index += _temp_grid_index
@@ -132,10 +131,10 @@ class ClusterSegmentSystem:
 
     def near_grid(self, h, w, key_state):  # h,w center pixel
         temp_grid_index = []
-        near_key_grid_index_list = []  # 临近的key grid
-        max_depth = []
-        min_depth = []
-        depth_xyz_c = [] # [max, min, [] ]
+        near_key_grid_index_list = []  # near key grid
+        # max_depth = []
+        # min_depth = []
+        # depth_xyz_c = [] # [max, min, [] ]
         for row in range(-1, 2):
             for col in range(-1, 2):
                 h_ = h + row
@@ -145,14 +144,14 @@ class ClusterSegmentSystem:
                         and self.index_map[h_, w_] != 0:  # index start from 1
                     index = self.index_map[h_, w_] - 1
                     temp_grid_index.append(index)  # temporary grid index list
-                    max_depth.append(self.grid_list[index].max_depth)
-                    depth_xyz_c.append(self.grid_list[index].max_pixel_hw)
-                    min_depth.append(self.grid_list[index].min_depth)
-                    depth_xyz_c.append(self.grid_list[index].min_pixel_hw)
+                    # max_depth.append(self.grid_list[index].max_depth)
+                    # depth_xyz_c.append(self.grid_list[index].max_pixel_hw)
+                    # min_depth.append(self.grid_list[index].min_depth)
+                    # depth_xyz_c.append(self.grid_list[index].min_pixel_hw)
 
                     if self.class_list[index][key_state] == 1:
                         near_key_grid_index_list.append(index)   # include the center grid
-        return temp_grid_index, near_key_grid_index_list, max_depth, min_depth, depth_xyz_c
+        return temp_grid_index, near_key_grid_index_list
 
     def cluster_process(self, dbscan_eps=0.5, min_samples=4):
         """for one frame of image
@@ -206,15 +205,15 @@ class ClusterSegmentSystem:
         axes[0, 0].set_title('exist map')
 
         axes[0, 1].imshow(self.mask + resize_image(need_cluster_grid_map, int(1/self.scale_factor)))
-        axes[0, 1].set_title('crack key grid')
+        axes[0, 1].set_title('crack grid')
 
         # axes[1, 0].imshow(self.grid_point_num)
         # axes[1, 0].set_title('number of point in grid')
         axes[1, 0].imshow(self.exist_map + need_cluster_grid_map + self.crack_key_grid*4)
-        axes[1, 0].set_title('max depth grid map')
+        axes[1, 0].set_title('mix map')
 
         axes[1, 1].imshow(self.exist_map + self.crack_key_grid)
-        axes[1, 1].set_title('mix map')
+        axes[1, 1].set_title('creak key grid')
 
         plt.tight_layout()
         plt.show()
@@ -243,6 +242,7 @@ class EdgeDetectors:
     def __init__(self):
         """edge detector for depth image"""
         pass
+
 
 class ClusterCOOMatrix:
     def __init__(self):
