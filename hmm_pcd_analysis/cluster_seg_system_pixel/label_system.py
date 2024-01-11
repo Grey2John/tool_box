@@ -19,7 +19,7 @@ data process
 #                   [0.0, 907.2291870117188, 378.90472412109375],
 #                   [0.0, 0.0, 1.0]])
 mask_size = [1280, 720]
-pixel_set = 6
+pixel_set = 10
 state_standard = {
     0: [0, 1, 2],
     1: [[0, 1], [0, 2], [1, 2]],
@@ -44,8 +44,8 @@ class Point:
     def __init__(self, xyz, hmm, annotated_label=None):
         self.coordinate = np.array(xyz)
         self.filter_prob = np.array(hmm)
-        self.obs_state = None
-        self.label_state = None
+        self.obs_state = None  # point observing have edge detect
+        self.label_state = None  # without edge detect, directly obs
         self.truth_label = annotated_label
         self.if_obs = True
         self.obs_times = 0
@@ -72,7 +72,7 @@ class ImagePose:
         self.point_index_list = []
 
     def observe_state(self, h, w):
-        obs_state = 0
+        state = 0
         state_lib = []
         label_state = self.mask[h, w]
         for i in range(-pixel_set, pixel_set+1):
@@ -85,8 +85,8 @@ class ImagePose:
             if isinstance(v, (int, float)):
                 v = [v]
             if v == sorted(state_lib):
-                obs_state = (len(state_lib) - 1) * 3 + j
-        return obs_state, label_state
+                state = (len(state_lib) - 1)*3 + j
+        return state, label_state
 
 
 class ImagePoseDic:
@@ -108,10 +108,10 @@ class ImagePoseDic:
         proj_state_count = 0
         for index_p in self.image_dic[frame].point_index_list:  # every point in each frame
             if self.point_list_lib[index_p].if_obs:
-                xy, xy_depth_c = project_3d_point_in_img(self.point_list_lib[index_p].coordinate,
-                                                         self.image_dic[frame].cam_k,
-                                                         self.image_dic[frame].pose_r,
-                                                         self.image_dic[frame].pose_t)
+                xy, xydepth_c = project_3d_point_in_img(self.point_list_lib[index_p].coordinate,
+                                                        self.image_dic[frame].cam_k,
+                                                        self.image_dic[frame].pose_r,
+                                                        self.image_dic[frame].pose_t)
                 if xy is False:
                     self.point_list_lib[index_p].obs_state = None
                     continue
@@ -121,8 +121,8 @@ class ImagePoseDic:
                 obs_state, label_state = self.image_dic[frame].observe_state(xy_int[1], xy_int[0])  # observing state
                 # 先y后x，这是因为在NumPy中，数组的第一个索引对应于行，第二个索引对应于列]
                 self.point_list_lib[index_p].obs_state = obs_state  # point observing have edge detect
-                self.point_list_lib[index_p].label_state = label_state  # without edge detect
-                self.one_CSS.grid_map_update(index_p, obs_state, label_state, xy, xy_depth_c)
+                self.point_list_lib[index_p].label_state = label_state  # without edge detect, directly obs
+                self.one_CSS.grid_map_update(index_p, obs_state, label_state, xy, xy_int, xydepth_c)
 
         print("the number of project points is {}".format(proj_state_count))
 
@@ -134,8 +134,10 @@ class ImagePoseDic:
                 state = k
             for i in v:
                 self.point_list_lib[i].obs_state = state
+                self.point_list_lib[i].label_state = state
 
     def one_frame_pcd_data_generate(self, f):
+        """generate the point data with pcd type"""
         points_obs = []
         points_label = []  # without edge detect
         for index_p in self.image_dic[f].point_index_list:
@@ -167,7 +169,7 @@ class ImagePoseDic:
             pcd_generate(points_obs, f, save_path, "edge_")
             """detect grid seed"""
             start_time = time.time()
-            self.one_CSS.crack_detect(3, save_path)
+            self.one_CSS.crack_detect(2, save_path)
             crack_time = time.time()
             state_change_dic = self.one_CSS.cluster_process()
             self.point_state_optim(state_change_dic)  # fix point state
@@ -178,7 +180,10 @@ class ImagePoseDic:
             """generate optimized pcd"""
             points_obs, points_label = self.one_frame_pcd_data_generate(f)
             pcd_generate(points_obs, f, save_path, "cluster_")
-            print("pcd generate {} cost {} s".format(f, (time.time() - cpd_start_time)))
+            print("cluster_pcd generate {} cost {} s".format(f, (time.time() - cpd_start_time)))
+            cpd_start_time1 = time.time()
+            pcd_generate(points_label, f, save_path, "fixed_")
+            print("fixed_pcd generate {} cost {} s".format(f, (time.time() - cpd_start_time1)))
             # image_visual = self.image_dic[frame].mask
             image_visual = self.one_CSS.exist_map
             # process_visualizer(image_visual)

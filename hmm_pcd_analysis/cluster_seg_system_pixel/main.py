@@ -16,7 +16,8 @@ def output_pcd_all_frame(work_space):
 
 
 def one_frame_test(json_path, save_path):
-    """input: one frame json
+    """
+    input: one frame json
     save the pcd
     """
     image_pose, points, point_origin_state = read_one_frame_data_json(json_path)
@@ -28,6 +29,6 @@ def one_frame_test(json_path, save_path):
 if __name__ == "__main__":
     # work_space = "/media/zlh/zhang/dataset/outline_seg_slam/bag5"
     # output_pcd_all_frame(work_space)
-
     one_frame_test("F:\dataset\outline_seg_slam\\bag2\one_frame\\35.json",
                    "F:\dataset\outline_seg_slam\\bag2\one_frame")
+

@@ -1,3 +1,5 @@
+import os.path
+
 import numpy as np
 from grid import GridUnit
 
@@ -8,6 +10,7 @@ from visualizer import edge_mask, resize_image
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from kdtree import KDTree
+from delaunay import delaunay_crack_detect
 
 
 mask_size = [720, 960]  # 矩阵是HxW
@@ -16,12 +19,19 @@ state_standard = {
     1: [[0, 1], [0, 2], [1, 2]],
     2: [[0, 1, 2]]
 }
+grid_state = {
+    3: [0, 1, 3],
+    4: [0, 2, 4],
+    5: [1, 2, 5]
+}
 two_edge_state = [[0, 1], [0, 2], [1, 2]]
 
 
 class ClusterSegmentSystem:
-    def __init__(self, mask=None, scale_factor=0.25):
+    def __init__(self, mask=None, scale_factor=0.2):
         self.scale_factor = scale_factor
+        self.scale_d = int(1/scale_factor)
+        self.scaled_mask_size_mid_line = [x * scale_factor / 2 for x in mask_size]  # 矩阵是HxW
         self.mask = mask   # 整体计算的时候要删除，非常耗时
         self.down_sampling_size = [int(s*scale_factor) for s in mask_size]
         self.index_map = np.zeros(self.down_sampling_size, dtype=np.int16)  # down sampling
@@ -37,7 +47,7 @@ class ClusterSegmentSystem:
         self.grid_point_num = np.zeros(self.down_sampling_size, dtype=np.int16)
         self.need_cluster_grid_group = {3:[], 4:[], 5:[]}  # for one frame of image
 
-    def grid_map_update(self, point_index, one_point_obs, xy, xyz_c):
+    def grid_map_update(self, point_index, one_point_obs, label_state, xy, xydepth_c):
         """
             for every point projection
             basic task for cluster segmentation
@@ -56,45 +66,72 @@ class ClusterSegmentSystem:
             zero_list[one_point_obs] = 1
             self.class_list.append(zero_list)
             new_grid = GridUnit(h, w)
-            new_grid.adjust_grid(point_index, one_point_obs, xy, xyz_c)
+            new_grid.adjust_grid(point_index, one_point_obs, label_state, xy, xydepth_c)
             self.grid_list.append(new_grid)
         else:
             self.class_list[self.index_map[h, w]-1][one_point_obs] = 1
-            self.grid_list[self.index_map[h, w]-1].adjust_grid(point_index, one_point_obs, xy, xyz_c)
+            self.grid_list[self.index_map[h, w] - 1].adjust_grid(point_index, one_point_obs, label_state, xy, xydepth_c)
 
-    def crack_detect(self, thread_hold=20):
+    def crack_detect(self, thread_hold=5, save_path=None):
         """
         for one frame of image
         Go through all key grid to find crack
         """
         """find the crack place, described by a seed of key grid"""
         crack_key_grid_index = {3: [], 4: [], 5: []}
+        crack_count = 0
+        check_count = 0
         for c in range(3, 6):  # key class 3, 4, 5
             # temp_class_mix = np.zeros(7, dtype=np.int8)  # class statics
             for i, l in enumerate(self.class_list):  # i, l - grid index, one class_list, load all key grid
                 if l[c] != 1:
                     continue
                 kdtree_points_one_region = []
+                delaunay_points_one_region = []
+                square_list = []
+                check_count += 1
 
                 h = self.row_col[i][0]
                 w = self.row_col[i][1]
                 temp_grid_index, near_key_grid_index_list = self.near_grid(h, w, c)
+
+                """using kdtree"""
+                # for g_index in temp_grid_index:
+                #     for j, one_p in enumerate(self.grid_list[g_index].point_xydepth):
+                #         if self.grid_list[g_index].point_obs_state[j] not in grid_state[c]:
+                #             continue
+                #         kdtree_point = one_p.copy()  # [xyz] in camera
+                #         kdtree_point.append(self.grid_list[g_index].point_index[j])  # index
+                #         kdtree_points_one_region.append(kdtree_point)
+                #
+                # if abs(h-self.scaled_mask_size_mid_line[0]) > abs(w-self.scaled_mask_size_mid_line[1]):
+                #     x_first = 0
+                # else:
+                #     x_first = 1  # horizontal cut
+                # one_tree = KDTree(kdtree_points_one_region, x_first)
+                # # square_list.append(patches.Rectangle((x, y), self.scale_d, self.scale_d, edgecolor='none', facecolor='red', alpha=0.5))
+                # if one_tree.crack_detect(thread_hold):
+                #     crack_count += 1
+                #     # one_tree.kdtree_visualize(crack_count, square_list, save_path)
+                #     crack_key_grid_index[c].append(self.index_map[h, w] - 1)
+                #     """crack_key_grid is the seed for generating the clustering region """
+                #     self.crack_key_grid[h, w] = c  # for visualization
+                """using Delaunay"""
                 for g_index in temp_grid_index:
-                    for j, one_p in enumerate(self.grid_list[g_index].point_xyz2c):
-                        kdtree_point = one_p.tolist()  # [xyz] in camera
-                        kdtree_point.append(self.grid_list[g_index].point_index[j])  # index
-                        kdtree_points_one_region.append(kdtree_point)
-
-                one_tree = KDTree(kdtree_points_one_region)
-                if one_tree.crack_detect(thread_hold):
+                    for j, one_p in enumerate(self.grid_list[g_index].point_xydepth):
+                        if self.grid_list[g_index].point_obs_state[j] not in grid_state[c]:
+                            continue
+                        delaunay_point = one_p.copy()  # [xyz] in camera
+                        delaunay_point.append(self.grid_list[g_index].point_index[j])  # index
+                        delaunay_points_one_region.append(delaunay_point)
+                if delaunay_crack_detect(delaunay_points_one_region, thread_hold):
+                    crack_count += 1
                     crack_key_grid_index[c].append(self.index_map[h, w] - 1)
-                    # crack_key_grid is the seed for generating the clustering region
-                    self.crack_key_grid[h, w] = c
-
+                    self.crack_key_grid[h, w] = c  # for visualization
+        print("the number of grid need be check is {}".format(check_count))
         """further more find the seg region, key grid directly linked to build cluster region"""
-
         key_grid_processed = []  # already add into the cluster group
-        for c, g_i_list in crack_key_grid_index.items():
+        for c, g_i_list in crack_key_grid_index.items():  # seed grid
             for g in g_i_list:  # g is the index of seed
                 continue_find = True
                 one_key_grid_seed = 0
@@ -121,13 +158,14 @@ class ClusterSegmentSystem:
                         temp_grid_index = list(set(temp_grid_index))
                         near_key_grid_index_list = list(set(near_key_grid_index_list))
 
-                    if set(near_key_grid_index_list).issubset(set(key_grid_processed)) or \
-                            len(near_key_grid_index_list) > 20:
+                    # if set(near_key_grid_index_list).issubset(set(key_grid_processed)) or \
+                    #         len(near_key_grid_index_list) > 20:
+                    if set(near_key_grid_index_list).issubset(set(key_grid_processed)):
                         continue_find = False
                         break
 
                 self.need_cluster_grid_group[c].append(temp_grid_index)
-        self.images_result_show()
+        # self.images_result_show(save_path)  # for visualization
 
     def near_grid(self, h, w, key_state):  # h,w center pixel
         temp_grid_index = []
@@ -153,7 +191,7 @@ class ClusterSegmentSystem:
                         near_key_grid_index_list.append(index)   # include the center grid
         return temp_grid_index, near_key_grid_index_list
 
-    def cluster_process(self, dbscan_eps=0.5, min_samples=4):
+    def cluster_process(self, dbscan_eps=10, min_samples=4):
         """for one frame of image
         find the points, cluster the points, seg the points
         return: fix point dictionary"""
@@ -167,8 +205,8 @@ class ClusterSegmentSystem:
                 group_point_state = []
                 for i_grid in g:
                     group_point_index += self.grid_list[i_grid].point_index
-                    group_point_depth += [d[-1] for d in self.grid_list[i_grid].point_xyz2c]
-                    group_point_state += self.grid_list[i_grid].point_state
+                    group_point_depth += [d[-1] for d in self.grid_list[i_grid].point_xydepth]
+                    group_point_state += self.grid_list[i_grid].point_obs_state
 
                 cluster_data = np.array(group_point_depth)
                 cluster_data2D = cluster_data.reshape(-1, 1)
@@ -188,11 +226,11 @@ class ClusterSegmentSystem:
                             continue
                         state_change_dic_p_index[ two_edge_state[c-3][peak_i[l]] ].append(group_point_index[j])
                 else:  # 多个类直接观测作废
-                    for l in enumerate(group_point_index):
+                    for k, l in enumerate(group_point_index):
                         state_change_dic_p_index["none"].append(l)
         return state_change_dic_p_index
 
-    def images_result_show(self):
+    def images_result_show(self, save_path=None):
         need_cluster_grid_map = np.zeros(self.down_sampling_size, dtype=np.int8)
         for k, group in self.need_cluster_grid_group.items():
             for g in group:
@@ -216,6 +254,8 @@ class ClusterSegmentSystem:
         axes[1, 1].set_title('creak key grid')
 
         plt.tight_layout()
+        if save_path:
+            plt.savefig(os.path.join(save_path, "detect_results.svg"), format='svg')
         plt.show()
 
     def show_3d_process_result(self, point_list):
