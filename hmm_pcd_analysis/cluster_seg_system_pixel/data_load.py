@@ -26,7 +26,7 @@ class OutlineDataLoader:
         self.obs_txt_path = os.path.join(dir_path, "pt_obs.txt")
         self.image_pose_txt_path = os.path.join(dir_path, "pt_obs_image_pose.txt")
         self.mask_image_dir_path = os.path.join(dir_path, "mask")
-        self.point_truth_label_path = os.path.join(dir_path, "labeled_pcd.pcd")
+        self.point_truth_label_path = os.path.join(dir_path, "labeled.pcd")
 
         self.image_pose_dic = ImagePoseDic(intrinsic_scale)
 
@@ -54,9 +54,13 @@ class OutlineDataLoader:
         """complete the point_index_list in each image_pose"""
         start_time = time.time()
         if not os.path.exists(self.obs_txt_path):
+            print("we do not find the point info, break point read")
             return False
         if not os.path.exists(self.point_truth_label_path):
-            return False
+            print("we do not find the labeled truth")
+            return None
+        else:
+            label_truth = read_truth_labeled_rgb_pcd(self.point_truth_label_path)
 
         points = PointDataLoader(self.obs_txt_path)
         self.point_list_source, points_frame_dic = points.read_txt_dic_points_with_obs_times()
@@ -64,11 +68,10 @@ class OutlineDataLoader:
         point_list_source: [xyz, rgb, no, first, obs, frame_id]
         points_frame_dic: [143: [point index]]
         """
-        label_truth = read_truth_labeled_rgb_pcd(self.point_truth_label_path)
         annotated_points = point_sample_labeling(label_truth, self.point_list_source, 8)
-        """annotated_points: [[xyz, truth, obs, frame], ]"""
+        """annotated_points: [[xyz, truth(None), first, obs ...], ...]"""
         for p in annotated_points:
-            one_point = Point(p[0:3], filter_init, p[3])
+            one_point = Point(p[0:3], filter_init, p[4], annotated_label=p[3])  # point class
             self.image_pose_dic.point_list_lib.append(one_point)
 
         for frame, dic in points_frame_dic.items():
@@ -80,13 +83,14 @@ class OutlineDataLoader:
         print("程序执行时间：{} 秒".format(end_time - start_time))
 
     def image_pose_read(self):
+        """[num, image_seq, xyz, x, y, z, w, fx, fy, cx, cy]"""
         start_time = time.time()
         if not os.path.exists(self.image_pose_txt_path):
             return False
         with open(self.image_pose_txt_path, 'r') as f:
             lines = f.readlines()
             for line in lines:
-                one_list = line.strip().split(', ')  # [num, image_seq, xyz, w, x, y, z]
+                one_list = line.strip().split(', ')  # [num, image_seq, xyz, x, y, z, w]
                 float_pose_data = [float(item) for item in one_list[2:2+7]]
                 R = Rotation.from_quat(float_pose_data[3:])
                 t = np.array(float_pose_data[0:3])
@@ -134,8 +138,52 @@ class OutlineDataLoader:
         return self.image_pose_dic
 
 
+# def save_entire_data_json(workspace, have_truth=True):
+#     """input pt.txt, pose.txt, mask list, truth.pcd"""
+#     start_time = time.time()
+#     json_path = os.path.join(work_space, "bag.json")
+#     entire_data_json = {"frame": {}, "point": None}
+#
+#     data = OutlineDataLoader(workspace)
+#     data.data_out_put()  # main process
+#     for f in data.image_pose_dic.image_dic.keys():
+#         point_index_list = data.image_pose_dic.image_dic[f].point_index_list
+#         mask = data.image_pose_dic.image_dic[f].mask.tolist()
+#         pose_r = data.image_pose_dic.image_dic[f].pose_r.tolist()
+#         pose_t = data.image_pose_dic.image_dic[f].pose_t.tolist()
+#         cam_k_ = data.image_pose_dic.image_dic[f].cam_k.tolist()
+#         cam_k = [cam_k_[0][0], cam_k_[1][1], cam_k_[0][2], cam_k_[1][2]]
+#         one_frame_json = {"point_index_list": point_index_list,
+#                           "mask": mask,
+#                           "pose_r": pose_r,
+#                           "pose_t": pose_t,
+#                           "cam_k": cam_k
+#                           }
+#         entire_data_json["frame"][f] = one_frame_json
+#     points = []  # [xyz, obs_state, truth label, ]
+#     for p_index in data.image_pose_dic.image_dic[f].point_index_list:
+#         xyz = data.image_pose_dic.point_list_lib[p_index].coordinate.tolist()
+#         origin_point_list = data.point_list_source[p_index]
+#         obs_index = None
+#         for l in range(int(len(origin_point_list[8:]) / 2)):
+#             if int(origin_point_list[8 + 2 * l + 1]) == f:
+#                 obs_index = 8 + 2 * l
+#                 break
+#         xyz.append(origin_point_list[obs_index])
+#         xyz.append(data.image_pose_dic.point_list_lib[p_index].truth_label)
+#         points.append(xyz)  # [xyz, one obs, truth_label]
+#     entire_data_json['point'] = points
+#
+#     with open(json_path, 'w') as ff:
+#         json.dump(entire_data_json, ff)
+#         # json.dump(one_frame_json, ff, indent=4)
+#     print("save the file: {}".format(json_path))
+#     print("entire task cost time is {}".format(time.time()-start_time))
+
+
 def save_frame_data_json(workspace, frame_list, have_truth=False):
     """ pick one frame out
+    workspace have image, bag
     input: frame list [20, 124, 122]
     save: point list, mask, pose_r, pose_t. the point in point list has annotated label
     save type: json
@@ -147,7 +195,7 @@ def save_frame_data_json(workspace, frame_list, have_truth=False):
     if not isinstance(frame_list, list):
         frame_list = [frame_list]
     data = OutlineDataLoader(workspace)
-    data.data_out_put()
+    data.data_out_put()  # main process
 
     for f in frame_list:
         if f not in data.image_pose_dic.image_dic.keys():
@@ -177,7 +225,7 @@ def save_frame_data_json(workspace, frame_list, have_truth=False):
                     break
             xyz.append(origin_point_list[obs_index])
             xyz.append(data.image_pose_dic.point_list_lib[p_index].truth_label)
-            points.append(xyz)
+            points.append(xyz)  # [xyz, one obs, truth_label]
         one_frame_json['point_list'] = points
         with open(json_path, 'w') as ff:
             json.dump(one_frame_json, ff)
@@ -192,8 +240,8 @@ def read_one_frame_data_json(json_path):
     frame_num = int(os.path.basename(json_path).split(".")[0])
     point_list = []
     point_origin_state = []
-    for p in one_frame_json["point_list"]:
-        one_point = Point(p[0:3], filter_init, p[4])  # add truth label
+    for p in one_frame_json["point_list"]:  # p [xyz, obs, truth]
+        one_point = Point(p[0:3], filter_init, p[3], annotated_label=p[4])  # add truth label
         point_list.append(one_point)
         point_origin_state.append(p[0:4])
 
@@ -264,15 +312,15 @@ def point_sample_labeling(truth_label_points, sample_points, obs_start_index):
         new_p += s[0:3]  # xyz
         try:
             new_p.append(origin_label_points_dir[s_name])  # ground truth
-            # new_p.append(s[3])  # first label
         except:
             new_p.append(None)
             none_count += 1
-        new_p += s[obs_start_index:]
+        new_p.append(s[7])  # first_state
+        new_p += s[obs_start_index:]  # obs_list, frame list
         points.append(new_p)
 
-    print("we get {} matched points, {} points' label is None".format(len(points), none_count))
-    return points  # x, y, z, true label, obs_list, frame list
+    print("we get {} matched points, {} points' label is None".format(len(points)-none_count, none_count))
+    return points  # x, y, z, true label, first_state, obs_list, frame list
 
 
 def mask_edge_change(mask_matrix):
@@ -281,9 +329,10 @@ def mask_edge_change(mask_matrix):
 
 
 if __name__ == "__main__":
-    work_space = "/media/zlh/zhang/dataset/outline_seg_slam/bag2"
-    frames = list(range(15, 300, 20))
+    work_space = "/media/zlh/zhang/earth_rosbag/paper_data/t3bag1"
+    frames = list(range(200, 250, 5))
     save_frame_data_json(work_space, frames)
+    # save_entire_data_json(work_space)
 
     # obj, points, point_origin_state = read_one_frame_data_json("/media/zlh/zhang/dataset/outline_seg_slam/test1/one_frame/30.json")
     # image_visual = obj.mask

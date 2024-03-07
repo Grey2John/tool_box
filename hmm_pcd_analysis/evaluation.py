@@ -25,7 +25,7 @@ class PointSegEvaluation:
         self.point_dir = {}  # 字典 {观测次数: [[xyz, filtered_list], [], []]}
 
     def filter_process(self):
-        """"""
+        """, """
         eval_result = {}
         for i in self.match_labeled_points:  # i: [xyz, truth, first label, obs]
             point = filter.PointHMM(3)
@@ -98,7 +98,7 @@ class PointSegEvaluation:
 
     def first_label_rate(self, save_path1, save_path2):
         """ the accuracy of the first observing
-         just one line"""
+         just write one line"""
         point_count = 0
         count = np.zeros(self.num_class ** 2)  # class count
         for p in self.point_list:
@@ -204,9 +204,9 @@ def _evaluation(confusion_matrix):
 
 
 if __name__ == "__main__":
-    file_num = 10
-    bag_txt_path = "F:\earth_rosbag\data\\test5_change\\bag_list\\bag10-g\pt_obs.txt".format(file_num)
-    ground_pcd = "F:\earth_rosbag\data\\test5_change\labeled\labeled\origin_bag{}.pcd".format(file_num)
+    file_num = 1
+    bag_txt_path = "/media/zlh/zhang/earth_rosbag/paper_data/t3bag1/bag{}.txt".format(file_num)
+    ground_pcd = "/media/zlh/zhang/earth_rosbag/paper_data/t3bag1/labeled{}.pcd".format(file_num)
     pe = PointSegEvaluation(bag_txt_path, ground_pcd,  less_time=12, max_obs_time=60)
     pe.filter_process()
     pe.first_label_rate(None, "F:\earth_rosbag\data\\test5_change\evaluation\\bag{}_2.txt".format(file_num))

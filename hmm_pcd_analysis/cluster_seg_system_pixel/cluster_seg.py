@@ -26,22 +26,23 @@ two_edge_state = [[0, 1], [0, 2], [1, 2]]
 
 
 class ClusterSegmentSystem:
-    def __init__(self, mask=None, scale_factor=0.125, upsample_pixel=2):
+    def __init__(self, mask=None, scale_factor=8, upsample_pixel=2):
         self.scale_factor = scale_factor
         # self.upsample_pixel = upsample_pixel
-        self.scale_d = int(1/scale_factor)
-        self.scaled_mask_size_mid_line = [x * scale_factor / 2 for x in mask_size]  # 矩阵是HxW
+        self.scale_d = scale_factor
+        self.scaled_mask_size_mid_line = [x / scale_factor / 2 for x in mask_size]  # 矩阵是HxW
         self.mask = mask   # 整体计算的时候要删除，非常耗时
-        self.down_sampling_size = [int(s*scale_factor) for s in mask_size]
+        self.down_sampling_size = [int(s/scale_factor) for s in mask_size]
         self.index_map = np.zeros(self.down_sampling_size, dtype=np.int16)  # down sampling
         self.exist_map = np.zeros(self.down_sampling_size, dtype=np.int8)  # down sampling
         self.key_grid_map = np.zeros(self.down_sampling_size, dtype=np.int8)  # for visualization
-        self.index_numer = 1
+        self.index_numer = 0
 
         # COO matrix
         self.row_col = []  # [[20, 30], []]
         self.class_list = []  # [[0,0,0,0,0,1,0], ]
-        self.grid_list = []  # main data
+        self.grid_list = []  # [GridUnit, ]
+        self.edge_state_pixel_dic = {3:[], 4:[], 5:[]}  # {3:[index, ], 4:[], 5:[]}
 
         self.crack_key_grid = np.zeros(self.down_sampling_size, dtype=np.int8)
         self.grid_point_num = np.zeros(self.down_sampling_size, dtype=np.int16)
@@ -52,7 +53,7 @@ class ClusterSegmentSystem:
             for every point projection
             basic task for cluster segmentation
         """
-        down_uv = np.round(xy * self.scale_factor).astype(int)
+        down_uv = np.floor(xy / self.scale_factor).astype(int)  # 从round改过来
         w = int(down_uv[0])  # x related to w
         h = int(down_uv[1])
         h_w_origin = np.array([xy_int[1], xy_int[0]])
@@ -61,7 +62,8 @@ class ClusterSegmentSystem:
             self.exist_map[h, w] = 1
             if one_point_obs in [3, 4, 5]:
                 self.key_grid_map[h, w] = 1
-            self.index_map[h, w] = self.index_numer  # 从1开始索引
+                self.edge_state_pixel_dic[one_point_obs].append(self.index_numer)
+            self.index_map[h, w] = self.index_numer+1  # 从1开始索引
             self.index_numer += 1
 
             self.row_col.append([h, w])
@@ -74,8 +76,91 @@ class ClusterSegmentSystem:
         else:
             if one_point_obs in [3, 4, 5]:
                 self.key_grid_map[h, w] = 1
+                self.edge_state_pixel_dic[one_point_obs].append(self.index_map[h, w]-1)
             self.class_list[self.index_map[h, w]-1][one_point_obs] = 1
             self.grid_list[self.index_map[h, w] - 1].adjust_grid(point_index, one_point_obs, label_state, h_w_origin, xydepth_c)
+
+    # def crack_detect(self, thread_hold=3, save_path=None):
+    #     """
+    #     for one frame of image
+    #     Go through all key grid to find crack
+    #     """
+    #     """find the crack place, described by a seed of key grid"""
+    #     check_count = 0
+    #     crack_count = 0
+    #
+    #     for c in range(3, 6):  # key class 3, 4, 5
+    #         # temp_class_mix = np.zeros(7, dtype=np.int8)  # class statics
+    #         key_grid_processed = []  # already add into the cluster group
+    #         for grid_index, l in enumerate(self.class_list):  # i, l - grid index, one class_list, load all key grid
+    #             if l[c] != 1 or (grid_index in key_grid_processed):
+    #                 continue
+    #             check_count += 1
+    #             key_grid_processed.append(grid_index)
+    #
+    #             if_extension = False
+    #             if_multi_detect = False
+    #             if self.grid_list[grid_index].upsampling_map.one_pixel_grad_check(thread_hold):
+    #                 """the gradient break in one pixel"""
+    #                 if_extension = True
+    #                 h = self.row_col[grid_index][0]
+    #                 w = self.row_col[grid_index][1]
+    #                 temp_grid_index, near_key_grid_index_list, combination_key_map = self.near_grid(h, w, c)
+    #             else:
+    #                 h = self.row_col[grid_index][0]
+    #                 w = self.row_col[grid_index][1]
+    #                 temp_grid_index, near_key_grid_index_list, combination_key_map = self.near_grid(h, w, c)
+    #                 """build pixel grad map"""
+    #                 zero = np.zeros([self.scale_d, self.scale_d])
+    #                 combination_exit_list = [[zero, zero, zero],
+    #                                          [zero, zero, zero],
+    #                                          [zero, zero, zero]]
+    #                 combination_depth_list = combination_exit_list.copy()
+    #                 for cm in combination_key_map:
+    #                     combination_exit_list[cm[0]][cm[1]] = self.grid_list[cm[2]].upsampling_map.exist_map
+    #                     combination_depth_list[cm[0]][cm[1]] = self.grid_list[cm[2]].upsampling_map.max_depth_matrix
+    #                 combination_exit_matrix = np.block(combination_exit_list)
+    #                 combination_depth_matrix = np.block(combination_depth_list)
+    #                 if_multi_detect = True
+    #
+    #                 if_extension = delaunay_crack_detect(combination_exit_matrix,
+    #                                                      combination_depth_matrix,
+    #                                                      crack_count,
+    #                                                      thread_hold=thread_hold,
+    #                                                      save_path=save_path)
+    #                 # self.grid_locate_visualizer(h, w, if_extension, combination_depth_matrix)  # key grid visualization
+    #             """if crack and extension"""
+    #             """further more find the seg region, key grid directly linked to build cluster region"""
+    #             if if_extension:
+    #                 crack_count += 1
+    #                 self.crack_key_grid[h, w] = c  # for visualization
+    #
+    #                 continue_find = True
+    #                 while continue_find:  # link to all the key grid
+    #                     rest_near_key_grid_index_list = []  # the key grids don't process
+    #                     for rest in near_key_grid_index_list:
+    #                         if rest not in key_grid_processed:
+    #                             rest_near_key_grid_index_list.append(rest)
+    #
+    #                     for g_index in rest_near_key_grid_index_list:
+    #                         h_ = self.row_col[g_index][0]
+    #                         w_ = self.row_col[g_index][1]
+    #                         _temp_grid_index, _near_key_grid_index_list, _ = self.near_grid(h_, w_, c)
+    #
+    #                         key_grid_processed.append(g_index)  # add into processed group
+    #                         temp_grid_index += _temp_grid_index
+    #                         near_key_grid_index_list += _near_key_grid_index_list
+    #                         temp_grid_index = list(set(temp_grid_index))
+    #                         near_key_grid_index_list = list(set(near_key_grid_index_list))
+    #
+    #                     if set(near_key_grid_index_list).issubset(set(key_grid_processed)):
+    #                         continue_find = False
+    #                         break
+    #                 self.need_cluster_grid_group[c].append(temp_grid_index)
+    #             elif if_multi_detect:
+    #                 key_grid_processed += near_key_grid_index_list  # reduce cost time
+    #     print("the number of grid need be check is {}".format(check_count))
+        # self.images_result_show(save_path)  # for visualization
 
     def crack_detect(self, thread_hold=3, save_path=None):
         """
@@ -86,16 +171,17 @@ class ClusterSegmentSystem:
         check_count = 0
         crack_count = 0
 
-        for c in range(3, 6):  # key class 3, 4, 5
+        for c, grid_index_list in self.edge_state_pixel_dic.items():  # key class 3, 4, 5
             # temp_class_mix = np.zeros(7, dtype=np.int8)  # class statics
             key_grid_processed = []  # already add into the cluster group
-            for grid_index, l in enumerate(self.class_list):  # i, l - grid index, one class_list, load all key grid
-                if l[c] != 1 or (grid_index in key_grid_processed):
+            for grid_index in grid_index_list:
+                if grid_index in key_grid_processed:
                     continue
                 check_count += 1
                 key_grid_processed.append(grid_index)
 
                 if_extension = False
+                if_multi_detect = False
                 if self.grid_list[grid_index].upsampling_map.one_pixel_grad_check(thread_hold):
                     """the gradient break in one pixel"""
                     if_extension = True
@@ -113,13 +199,13 @@ class ClusterSegmentSystem:
                                              [zero, zero, zero]]
                     combination_depth_list = combination_exit_list.copy()
                     for cm in combination_key_map:
-                        combination_exit_list[cm[0]][cm[1]] = self.grid_list[cm[2]].upsampling_map.exist_map
+                        # combination_exit_list[cm[0]][cm[1]] = self.grid_list[cm[2]].upsampling_map.exist_map
                         combination_depth_list[cm[0]][cm[1]] = self.grid_list[cm[2]].upsampling_map.max_depth_matrix
-                    combination_exit_matrix = np.block(combination_exit_list)
+                    # combination_exit_matrix = np.block(combination_exit_list)
                     combination_depth_matrix = np.block(combination_depth_list)
+                    if_multi_detect = True
 
-                    if_extension = delaunay_crack_detect(combination_exit_matrix,
-                                                         combination_depth_matrix,
+                    if_extension = delaunay_crack_detect(combination_depth_matrix,
                                                          crack_count,
                                                          thread_hold=thread_hold,
                                                          save_path=save_path)
@@ -152,8 +238,9 @@ class ClusterSegmentSystem:
                             continue_find = False
                             break
                     self.need_cluster_grid_group[c].append(temp_grid_index)
-        print("the number of grid need be check is {}".format(check_count))
-        # self.images_result_show(save_path)  # for visualization
+                elif if_multi_detect:
+                    key_grid_processed += near_key_grid_index_list  # reduce cost time
+        print("the number of grid need be check is {}, crack is {}".format(check_count, crack_count))
 
     def near_grid(self, h, w, key_state):  # h,w center pixel
         temp_grid_index = []
@@ -175,7 +262,7 @@ class ClusterSegmentSystem:
                         map_key_index.append([row + 1, col + 1, index])
         return temp_grid_index, near_key_grid_index_list, map_key_index
 
-    def cluster_process(self, dbscan_eps=2, min_samples=3):
+    def cluster_process(self, dbscan_eps=2, min_pts=3):
         """for one frame of image
         find the points, cluster the points, seg the points
         return: fix point dictionary
@@ -196,14 +283,14 @@ class ClusterSegmentSystem:
                 cluster_data = np.array(group_point_depth)
                 cluster_data2D = cluster_data.reshape(-1, 1)
                 cluster_data2D_matrix = squareform(pdist(cluster_data2D, metric='euclidean'))
-                dbscan = DBSCAN(eps=dbscan_eps, min_samples=min_samples, metric='precomputed')
+                dbscan = DBSCAN(eps=dbscan_eps, min_samples=min_pts, metric='precomputed')
                 clusters_result = dbscan.fit_predict(cluster_data2D_matrix)  # point index, -1 is noise
                 # self.cluster_show(group_point_depth, clusters_result)    # for visualization
                 # [0,  0,  0,  0 , 0 , 1,  1,  1,  1, -1,  2,  2,  2,  2,  2]
                 if 1 not in clusters_result:
                     continue  # all the point belong to one class
                 type_count = np.zeros([np.max(clusters_result)+1, 2], dtype=np.int16)
-                temp_cluster_point_index = {}
+                temp_cluster_point_index = dict([(k, []) for k in range(0, np.max(clusters_result)+1)])
                 for i, cluster_label in enumerate(clusters_result):
                     if cluster_label == -1:
                         state_change_dic_p_index["none"].append(group_point_index[i])

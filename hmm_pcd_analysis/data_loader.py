@@ -89,8 +89,8 @@ class PointDataLoader:
         return points
 
     def read_txt_list_points(self, have_obs_time=True, min_time=0, upper_times=None):
-        """output: xyz, first label, obs """
-        """更具txt格式修改把"""
+        """output: xyz, first label, obs
+        input: [xyz, rgb, No, first label, obs, obs_time, obs, obs_time]"""
         points = []
         with open(self.txt_path, 'r') as f:
             lines = f.readlines()
@@ -231,6 +231,6 @@ if __name__ == "__main__":
     # print(xyzrgb[5])
     # pcd_generate(xyzrgb, '/home/zlh/data/sandpile_source/data/test1/origin_pcd_for_label', 'origin6')
 
-    # 有观测序号的txt
+    # 有观测序号的txt [xyz, rgb, no, first label, obs, obs_time, obs, obs_time]
     read_tool = PointDataLoader("/media/zlh/zhang/earth_rosbag/data/test3/obs_times_txt/bag12.txt")
     point, point_index = read_tool.read_txt_dic_points_with_obs_times()

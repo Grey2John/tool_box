@@ -2,15 +2,17 @@ import numpy as np
 import os
 import open3d as o3d
 
-import data_loader
 import data_loader as DL
 
 startprob = np.array([[0.4, 0.3, 0.3],   # none
                      [0.4, 0.3, 0.3],   # rock
                      [0.4, 0.3, 0.3]])   # sand
-transmat = np.array([[0.985,	0.009,	0.0063],
-                    [0.02845,	0.9711,	0.0004],
-                    [0.0092,	0.0005,	0.9903]])
+# transmat = np.array([[0.985,	0.009,	0.0063],
+#                     [0.02845,	0.9711,	0.0004],
+#                     [0.0092,	0.0005,	0.9903]])
+transmat = np.array([[1, 0,	0],
+                    [0,	1,	0],
+                    [0,	0,	1]])
 emissionprob = np.array([[0.9974, 0.00039, 0.0000017, 0.00118, 0.00102, 0,	0],
                       [0.12693,	0.75310, 0.000039, 0.11413, 0.00042, 0.00291, 0.00246],
                       [0.02638,	0.0004477, 0.78807, 0.00094, 0.1532, 0.00963, 0.02133]]) # matlab
@@ -61,6 +63,7 @@ class PointHMM:
     def filter_all_list(self, point_in):
         """ 输入一个点的观测系列，输出这个点所有观测次的预测结果list
         还加入了第一次无观察的点
+        point_in [xyz, first label, obs_list]
         """
         ys = point_in[4:]
         filtered_list = [point_in[3]]  # 还加入了第一次无观察的点
@@ -106,7 +109,7 @@ def one_obs_txt2pcd(txt_dir, save_path):
     for txt in os.listdir(txt_dir):
         if '.txt' in txt:
             print("process {}".format(txt))
-            data = data_loader.PointDataLoader( os.path.join(txt_dir, txt) )
+            data = DL.PointDataLoader( os.path.join(txt_dir, txt) )
             points = data.read_txt_list_state_points()
 
             name = txt.split('.')[0]

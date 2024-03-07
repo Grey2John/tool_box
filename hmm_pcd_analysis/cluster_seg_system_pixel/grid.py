@@ -59,15 +59,15 @@ class PixelMapInGrid:
             return False
 
 
-def delaunay_crack_detect(exit_matrix, depth_matrix, count, thread_hold=10, save_path=None):
+def delaunay_crack_detect(depth_matrix, count, thread_hold=10, save_path=None):
     """go through all the edge, find the grad > thread_hold
     if number of point <= 5, using combinations
     else using delaunay
     """
-    non_zero_indices = list(zip(*np.nonzero(exit_matrix)))
-    non_zero_indices_np = np.array(non_zero_indices)
+    non_zero_indices = list(zip(*np.nonzero(depth_matrix)))
+    non_zero_indices_np = np.array(non_zero_indices)  # 取整点坐标
     n = len(non_zero_indices_np)
-    if 1 < n <= 5:
+    if 1 < n <= 8:
         for i in range(n-1):
             for j in range(i + 1, n):
                 D = distance(non_zero_indices_np[i], non_zero_indices_np[j])

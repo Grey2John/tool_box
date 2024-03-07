@@ -49,7 +49,7 @@ class PointDataLoader:
                         one_point['obs'].append(int(str))
                     one_point['obs'].append(int(one_list[-1][0]))
                     same_times_obs.append(one_point)
-            self.down_points_dir[len(one_list)-4] = same_times_obs
+            self.down_points_dir[len(one_list) - 4] = same_times_obs
         print('length is {}'.format(len(self.down_points_dir)))
         print('sample like {}'.format(self.down_points_dir[10][1]))
 
@@ -94,12 +94,12 @@ class PointDataLoader:
             print("we got {} points".format(len(lines)))
             for line in lines:
                 one_list = line.split(', ')
-                if down_time != 0 and (len(one_list) - 8)<=down_time:
+                if down_time != 0 and (len(one_list) - 8) <= down_time:
                     continue
                 one_point = [float(str_num) for str_num in one_list[0:3]]
                 one_point.append(int(one_list[7]))
-                if len(one_list[8:])>upper_times:
-                    for str in one_list[8:upper_times+8]:
+                if len(one_list[8:]) > upper_times:
+                    for str in one_list[8:upper_times + 8]:
                         one_point.append(int(str))
                 else:
                     for str in one_list[8:-1]:
@@ -119,8 +119,8 @@ class PointDataLoader:
                 point = point_templet.copy()
                 point["xyz"] = [float(str_num) for str_num in one_list[0:3]]
                 point["rgb"] = [float(str_num) for str_num in one_list[3:6]]
-                point["no"] = int( one_list[6] )
-                point["init_state"] = int( one_list[7] )
+                point["no"] = int(one_list[6])
+                point["init_state"] = int(one_list[7])
                 point["obs"] = [int(str_num) for str_num in one_list[8:]]
 
                 obs_num = len(one_list) - 8
@@ -129,11 +129,34 @@ class PointDataLoader:
                 else:
                     points[obs_num] = [point]
 
-        print( 'length is {}'.format( len(points.keys()) ) )
+        print('length is {}'.format(len(points.keys())))
         print(points[10][1])
         return points
 
-    def read_txt_dic_points_with_obs_times(self):
+    def read_txt2list_points(self):
+        """ [11.3883, 1.98356, 1.24666, None, 2, 2, 2]"""
+        points = []
+        with open(self.txt_path, 'r') as f:
+            lines = f.readlines()
+            print("we got {} points".format(len(lines)))
+        for line in lines:
+            cont = False
+            one_list = line.split(', ')
+            one_point = [float(str_num) for str_num in one_list[0:3]]  # xyz
+            for obs in one_list[3:-1]:  # truth, obs
+                if obs == 'None':
+                    cont = True
+                    break
+                one_point.append(int(obs))  # first, filtered obs
+            if cont:
+                continue
+            if 'None' in one_list[-1]:
+                continue
+            one_point.append(int(one_list[-1][0]))
+            points.append(one_point)
+        return points
+
+    def read_txt_dic_points_with_obs_times(self, obs_index=8):
         """
         input txt: xyz, rgb, No, first_state, obs_state, obs_time, ...
         output two data:
@@ -151,16 +174,16 @@ class PointDataLoader:
                 one_point = [float(str_num) for str_num in one_list[0:6]]  # xyz rgb
                 one_point.append(int(one_list[6]))  # No
                 one_point.append(int(one_list[7]))  # first state
-                if len(one_list[8:]) % 2 != 0:
+                if len(one_list[obs_index:]) % 2 != 0:
                     continue
                 one_list[-1] = one_list[-1].replace('\n', '')
-                for i in range(int(len(one_list[8:])/2)):
-                    one_point.append(int(one_list[8 + 2*i]))
-                    one_point.append(int(one_list[8 + 2*i + 1]))
-                    if points_dic.get(int(one_list[8 + 2*i + 1])) is None:
-                        points_dic[ int(one_list[8 + 2*i + 1]) ] = [point_num]
+                for i in range(int(len(one_list[obs_index:]) / 2)):
+                    one_point.append(int(one_list[obs_index + 2 * i]))
+                    one_point.append(int(one_list[obs_index + 2 * i + 1]))
+                    if points_dic.get(int(one_list[obs_index + 2 * i + 1])) is None:
+                        points_dic[int(one_list[obs_index + 2 * i + 1])] = [point_num]
                     else:
-                        points_dic[int(one_list[8 + 2*i + 1])].append(point_num)
+                        points_dic[int(one_list[obs_index + 2 * i + 1])].append(point_num)
                 points.append(one_point)
 
                 point_num += 1
@@ -170,19 +193,19 @@ class PointDataLoader:
 
 def down_sample(origin_point, alpha1, save_path):
     """生成降采样的txt文件"""
-    coeff = np.linspace(alpha1, 1, len( origin_point.keys() )).tolist()
+    coeff = np.linspace(alpha1, 1, len(origin_point.keys())).tolist()
     print("length is {}".format(len(coeff)))
     keys = sorted(origin_point.keys())
     for i, k in enumerate(keys):
-        get_num = math.ceil( coeff[i]*len(origin_point[k]) )
+        get_num = math.ceil(coeff[i] * len(origin_point[k]))
         print("obs time is {}, get {} from {}".format(k, get_num, len(origin_point[k])))
         sample_list = random.sample(origin_point[k], get_num)
 
-        file = os.path.join(save_path, str(k)+".txt")
+        file = os.path.join(save_path, str(k) + ".txt")
         with open(file, 'a') as f:
             for p in sample_list:
-                one_line = ", ".join( [str(x) for x in p["xyz"]] )
-                one_line = one_line + ", " + ", ".join( [str(x) for x in p["rgb"]] )
+                one_line = ", ".join([str(x) for x in p["xyz"]])
+                one_line = one_line + ", " + ", ".join([str(x) for x in p["rgb"]])
                 one_line = one_line + ", " + str(p["no"]) + ", " + str(p["init_state"])
                 one_line = one_line + ", " + ", ".join([str(x) for x in p["obs_queue"]])
                 f.write(one_line + "\n")
