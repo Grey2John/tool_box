@@ -25,12 +25,12 @@ def rosbag_rgba_to_image(bag, save_path, rgb_name="rgb", mask_name="mask"):
 
                 rgb_path = os.path.join(rgb_dir, f"{seq}.jpg")
                 print(rgb_path)
-                cv2.imwrite(rgb_path, rgb_image)
+                # cv2.imwrite(rgb_path, rgb_image)
                 mask_path = os.path.join(mask_dir, f"{seq}.png")
                 print(mask_path)
                 cv2.imwrite(mask_path, alpha_channel)
 
 
 if __name__ == "__main__":
-    rosbag_rgba_to_image('/media/zlh/zhang/earth_rosbag/paper_data/t3bag10/yolo.bag',
-                         '/media/zlh/zhang/earth_rosbag/paper_data/t3bag10')
+    rosbag_rgba_to_image('/media/zlh/zhang/earth_rosbag/paper_data/t3bag4/yolo.bag',
+                         '/media/zlh/zhang/earth_rosbag/paper_data/t3bag4')

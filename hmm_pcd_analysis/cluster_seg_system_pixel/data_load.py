@@ -71,7 +71,7 @@ class OutlineDataLoader:
         annotated_points = point_sample_labeling(label_truth, self.point_list_source, 8)
         """annotated_points: [[xyz, truth(None), first, obs ...], ...]"""
         for p in annotated_points:
-            one_point = Point(p[0:3], filter_init, p[4], annotated_label=p[3])  # point class
+            one_point = Point(p[0:3], filter_init, annotated_label=p[3])  # point class
             self.image_pose_dic.point_list_lib.append(one_point)
 
         for frame, dic in points_frame_dic.items():
@@ -241,7 +241,7 @@ def read_one_frame_data_json(json_path):
     point_list = []
     point_origin_state = []
     for p in one_frame_json["point_list"]:  # p [xyz, obs, truth]
-        one_point = Point(p[0:3], filter_init, p[3], annotated_label=p[4])  # add truth label
+        one_point = Point(p[0:3], filter_init, annotated_label=p[4])  # add truth label
         point_list.append(one_point)
         point_origin_state.append(p[0:4])
 
@@ -329,8 +329,9 @@ def mask_edge_change(mask_matrix):
 
 
 if __name__ == "__main__":
-    work_space = "/media/zlh/zhang/earth_rosbag/paper_data/t3bag1"
-    frames = list(range(200, 250, 5))
+    # 产生某些帧的json
+    work_space = "/media/zlh/zhang/earth_rosbag/paper_data/t4bag22"
+    frames = list(range(5, 100, 5))
     save_frame_data_json(work_space, frames)
     # save_entire_data_json(work_space)
 

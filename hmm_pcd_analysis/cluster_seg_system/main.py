@@ -29,5 +29,5 @@ if __name__ == "__main__":
     # work_space = "/media/zlh/zhang/dataset/outline_seg_slam/bag5"
     # output_pcd_all_frame(work_space)
 
-    one_frame_test("F:\dataset\outline_seg_slam\\bag2\one_frame\\35.json",
-                   "F:\dataset\outline_seg_slam\\bag2\one_frame")
+    one_frame_test("/media/zlh/zhang/earth_rosbag/paper_data/t4bag22/one_frame/95.json",
+                   "/media/zlh/zhang/earth_rosbag/paper_data/t4bag22/one_frame")

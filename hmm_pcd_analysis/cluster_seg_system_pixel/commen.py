@@ -22,3 +22,4 @@ def save_list2txt(list_data, save_name):
         for sublist in list_data:
             line = ', '.join(str(element) for element in sublist)
             f.write(line + '\n')
+

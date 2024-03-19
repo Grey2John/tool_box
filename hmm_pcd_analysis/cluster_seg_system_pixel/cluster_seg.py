@@ -6,10 +6,8 @@ from grid import GridUnit, delaunay_crack_detect
 from sklearn.cluster import DBSCAN
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import squareform
-from visualizer import edge_mask, resize_image
+from visualizer import resize_image
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-
 
 mask_size = [720, 960]  # 矩阵是HxW
 state_standard = {

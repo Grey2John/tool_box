@@ -1,15 +1,11 @@
 import os
-import sys
 import time
-import cv2
 # import rosbag
 # from cv_bridge import CvBridge
 import numpy as np
-import matplotlib.pyplot as plt
 
 from cluster_seg import ClusterSegmentSystem
-from filter import PointList2RGBPCD as P2pcd
-from filter import LabelPCD
+from pcd_gen import PointList2RGBPCD as P2pcd
 from commen import add_save_list2txt, save_list2txt
 from evaluation import eval_one_times, PointHMMEvaluation
 
@@ -48,10 +44,10 @@ label_rgb = [[255, 0, 0], [0, 255, 0], [0, 0, 255],  # 0, 1, 2
 
 
 class Point:
-    def __init__(self, xyz, hmm, first_state, annotated_label=None):
+    def __init__(self, xyz, hmm, annotated_label=None):
         self.coordinate = np.array(xyz)
         self.filter_prob = np.array(hmm)
-        self.first_state = first_state
+        self.first_state = None
         self.obs_state = None  # point observing have edge detect
         self.label_state = None  # without edge detect, directly obs
         self.truth_label = annotated_label  # read the null will become None
@@ -61,8 +57,12 @@ class Point:
         self.obs_list = []
         self.opti_obs_list = []
 
-    def update_tims(self, max_time=100):  # reduce observation
+    def update_tims(self, obs_state, label_state, max_time=150):  # reduce observation
+        if self.obs_times == 0:
+            self.first_state = label_state
         self.obs_times += 1
+        self.obs_state = obs_state
+        self.label_state = label_state
         if self.obs_times >= max_time:
             self.if_obs = False
 
@@ -140,13 +140,12 @@ class ImagePoseDic:
                     self.point_list_lib[index_p].obs_state = None
                     continue
                 proj_state_count += 1
-                self.point_list_lib[index_p].update_tims()
+
                 xy_int = np.round(xy).astype(int)
                 obs_state, label_state = self.image_dic[frame].observe_state(xy_int[1], xy_int[0],
                                                                              pixel_set=scale_factor)  # observing state
                 # 先y后x，这是因为在NumPy中，数组的第一个索引对应于行，第二个索引对应于列]
-                self.point_list_lib[index_p].obs_state = obs_state  # point observing have edge detect
-                self.point_list_lib[index_p].label_state = label_state  # without edge detect, directly obs
+                self.point_list_lib[index_p].update_tims(obs_state, label_state)
                 self.one_CSS.grid_map_update(index_p, obs_state, label_state, xy, xy_int, xydepth_c)
                 new_index.append(index_p)
                 """for hmm recording"""
@@ -200,6 +199,9 @@ class ImagePoseDic:
             p_new.append(self.point_list_lib[index_p].truth_label)
             evaluation_data.append(p_new)
         return evaluation_data
+
+    def one_frame_process(self):
+        None
 
     def process(self, save_path, scale_factor=8, gen_pcd=False, log_info=False):
         """main function to process every image"""
@@ -267,6 +269,8 @@ class ImagePoseDic:
         opti_hmm_list = []
         origin_hmm_list = []
         for point in self.point_list_lib:
+            if len(point.obs_list) < 2 or point.truth_label is None:
+                continue  # 少于2次观测，忽略无真值点
             one_p = []
             one_p += point.coordinate.tolist()
             one_p.append(point.truth_label)
@@ -279,6 +283,7 @@ class ImagePoseDic:
             one_p_origin = one_p.copy()
             one_p_origin += point.obs_list
             origin_hmm_list.append(one_p_origin)
+        print("we get {} points for hmm calculate".format(len(origin_hmm_list)))
         return opti_hmm_list, origin_hmm_list
 
 
@@ -293,13 +298,11 @@ def pcd_generate(points_obs, frame, save_path, prefix=None):
 def project_3d_point_in_img(xyz, K, pose_r, pose_t):
     # xyz_1 = np.append(xyz, 1)
     camera_point = np.dot(pose_r, xyz) + pose_t
-    # depth = camera_point[-1]
-    # if depth < 0.001:
-    #     return False, False
+
     image_xy = np.dot(K, camera_point)
     u_v = image_xy[:2] / image_xy[2]  # [x, y] [heng, zong] [w, h] [col, row]
     cut_uv = u_v - np.array([160, 0])
-    if 2 <= cut_uv[0] < 958 and 2 <= cut_uv[1] < 718:  # available observing region
+    if 5 <= cut_uv[0] <= 955 and 5 <= cut_uv[1] <= 715:  # available observing region
         list_uvd = cut_uv.tolist()
         list_uvd.append(camera_point[2] * 10)
         return cut_uv, list_uvd  # not Rounding for keeping accuracy
@@ -344,9 +347,11 @@ def multi_frame_task(data, save_path):
     file.close()
     opti_hmm = PointHMMEvaluation(opti_hmm_list)
     opti_hmm.filter_process()
-    opti_hmm.less_time_result_eval(4,os.path.join(save_path1, "opti_eval_hmm.txt"))
+    opti_hmm.first_label_rate(os.path.join(save_path1, "opti_eval_hmm.txt"))
+    opti_hmm.less_time_result_eval(4, os.path.join(save_path1, "opti_eval_hmm.txt"))
 
     origin_hmm = PointHMMEvaluation(origin_hmm_list)
     origin_hmm.filter_process()
-    origin_hmm.less_time_result_eval(4,os.path.join(save_path1, "origin_eval_hmm.txt"))
+    origin_hmm.first_label_rate(os.path.join(save_path1, "origin_eval_hmm.txt"))
+    origin_hmm.less_time_result_eval(4, os.path.join(save_path1, "origin_eval_hmm.txt"))
 

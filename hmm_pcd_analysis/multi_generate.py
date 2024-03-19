@@ -28,6 +28,7 @@ def one_txt_pipeline(source_txt, save_path, min_obs_time=12, max_obs_time=150):
 
 
 def save_pcd(name, points_in, save_path, min_obs_time):
+    """points_in is [xyz, first, label]"""
     filter_name = "filter_{}".format(name)
     non_filter_name = "non_filter_{}".format(name)
     points_first_obs = [l[:4] for l in points_in]

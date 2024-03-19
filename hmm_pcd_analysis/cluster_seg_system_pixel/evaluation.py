@@ -3,7 +3,7 @@ import os
 from multiprocessing import Process
 from filter import PointHMM
 from data_loader import PointDataLoader
-from tqdm import tqdm
+
 
 def eval_one_times(data, frame, num_class=3, save_path=None):
     """
@@ -66,7 +66,7 @@ def _evaluation(confusion_matrix):
 
 
 class PointHMMEvaluation:
-    def __init__(self, point_list, if_load=False, max_obs_time=150):
+    def __init__(self, point_list, if_load=False):
         """match_labeled_points: [xyz, truth, first label, obs] is what we need"""
         if if_load:
             data = PointDataLoader(point_list)  # point_list is path
@@ -75,22 +75,25 @@ class PointHMMEvaluation:
             self.match_labeled_points = point_list
         self.num_class = 3
 
-        self.time_list = []
+        self.time_list = []  # 观测次数的列表
         self.point_list = []
         self.point_dir = {}  # 字典 {观测次数: [[xyz, filtered_list], [], []]}
 
     def filter_process(self):
         """, """
         eval_result = {}
-        for i in self.match_labeled_points:  # i: [xyz, truth, first label, obs]
+        for i in self.match_labeled_points:  # i: [xyz, truth(None), first label, obs(empty)]
             point = PointHMM(self.num_class)
             point_filtered = point.filter_all_list(i[0:3] + i[4:])  # 输入 [xyz, first label, obs_list]
+            if point_filtered is False:
+                continue
             if (len(i) - 5) not in self.time_list:
                 self.time_list.append(len(i) - 5)
                 self.point_dir[len(i) - 5] = [i[0:4] + point_filtered]  # [xyz, truth, first label, filter_label_list]
             else:
                 self.point_dir[len(i) - 5].append(i[0:4] + point_filtered)
-            self.point_list.append(i[0:4] + point_filtered)  # [xyz, truth, first label, filter_label_list]
+            """filtered results"""
+            self.point_list.append(i[0:4] + point_filtered)  # [xyz, truth(None), first label, filter_label_list]
         self.time_list.sort()  # 存的所有观测次数
         print("done all points filter")
         print("point list size is {}".format(len(self.point_list)))
@@ -123,12 +126,39 @@ class PointHMMEvaluation:
             print("down {} loop".format(loop_num))
         return eval_result
 
+    def first_label_rate(self, save_path):
+        """ the accuracy of the first observing -- direct label
+         just write one line
+         """
+        point_count = 0
+        count = np.zeros(self.num_class ** 2)  # class count
+        for p in self.point_list:
+            non_filter_label = p[4]  # first label without filter
+            truth_label = p[3]  # [xyz, truth, filter_label]
+            point_count += 1
+            count[self.num_class * truth_label + non_filter_label] += 1
+
+        confusion_matrix = count.reshape(self.num_class, self.num_class)  # to 2D
+        acc, iou_list = _evaluation(confusion_matrix)
+        eval_out = [acc] + iou_list
+
+        one_line = str(1) + ", " + str(point_count)
+        for s in ([acc] + iou_list):
+            one_line = one_line + ", " + str(s)
+        one_line = one_line + "\n"
+
+        with open(save_path, 'a') as ff:
+            ff.write(one_line)
+            print("save the evaluation result of {} times".format(1))
+        return eval_out
+
 
 def _hmm_eval_less_times(point_list, time, num_class, save_path):
     """
     少于某次数的所有点都取
      AP IoU
      point_list [xyz, truth, first label, filter_label_list]
+     time is
      """
     point_count = 0
     count = np.zeros(num_class ** 2)
@@ -164,8 +194,9 @@ def _hmm_eval_less_times(point_list, time, num_class, save_path):
 
 
 if __name__ == "__main__":
-    read_tool = PointHMMEvaluation("/media/zlh/zhang/earth_rosbag/paper_data/t3bag1/evaluation/opti_for_hmm.txt"
-                                   , if_load=True)
+    # 读txt进行直接评价，中间执行，读两个优化和无优化的txt，分别输出2个hmm结果
+    save_path = '/media/zlh/zhang/earth_rosbag/paper_data/t3bag4/evaluation'
+    source_txt = "/media/zlh/zhang/earth_rosbag/paper_data/t3bag4/evaluation/opti_for_hmm.txt"
+    read_tool = PointHMMEvaluation(source_txt, if_load=True)
     read_tool.filter_process()
-    read_tool.less_time_result_eval(4, os.path.join('/media/zlh/zhang/earth_rosbag/paper_data/t3bag1/evaluation'
-                                                    , "opti_eval_hmm.txt"))
+    read_tool.less_time_result_eval(4, os.path.join(save_path, "opti_eval_hmm.txt"))
