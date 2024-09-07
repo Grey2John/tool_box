@@ -9,7 +9,6 @@ from evaluation import PointHMMEvaluation
 
 def output_pcd_all_frame(work_space):
     """
-
     :param work_space:
     :return:
     """
@@ -21,7 +20,7 @@ def output_pcd_all_frame(work_space):
     pcd_path = os.path.join(work_space, "pcd")
     if not os.path.exists(pcd_path):
         os.makedirs(pcd_path)
-    all_image_data.process(pcd_path)
+    all_image_data.process(pcd_path, edge_D=10)
 
 
 def one_frame_test(json_path, save_path):
@@ -97,14 +96,17 @@ if __name__ == "__main__":
     args = parser.parse_args()
     # work_space = "/media/zlh/zhang/dataset/outline_seg_slam/bag5"
     # output_pcd_all_frame(work_space)
-    # one frame
-    # one_frame_test("F:\dataset\outline_seg_slam\\bag2\one_frame\\35.json",
-    #                "F:\dataset\outline_seg_slam\\bag2\one_frame")
+    # one frame，产生单帧分析的四个图像
+    # one_frame_test("I:\earth_rosbag\paper_data\\t4bag3\one_frame\\120.json",
+    #                "I:\earth_rosbag\paper_data\\t4bag3\one_frame")
+    # one_frame_test("/media/zlh/WD_BLACK/earth_rosbag/paper_data/t3bag10/one_frame/120.json",
+    #                "/media/zlh/WD_BLACK/earth_rosbag/paper_data/t3bag10/one_frame")
 
     # multi frame
     # multi_frame_test("/media/zlh/zhang/earth_rosbag/paper_data/t3bag1")
+    # multi_frame_test("I:\earth_rosbag\paper_data\\t3bag1")
     if args.work_path and not args.pcd_frame:
-        multi_frame_test(args.work_path)
+        multi_frame_test(args.work_path)  # python main.y -w xxx/paper_data/t4bag14
     # pcd generate
     elif args.work_path and args.pcd_frame:
         read_txt2pcd(args.work_path, args.pcd_frame)  # 读取txt，输出pcd文件，以便于可视化

@@ -32,13 +32,108 @@ def eval_one_times(data, frame, num_class=3, save_path=None):
     return acc, iou_list, point_count, TP, FP
 
 
-# def _evaluation(confusion_matrix):
-#     acc = np.diag(confusion_matrix).sum() / confusion_matrix.sum()  # accuracy
-#     MIoU = np.diag(confusion_matrix) / (
-#             np.sum(confusion_matrix, axis=1) + np.sum(confusion_matrix, axis=0) -
-#             np.diag(confusion_matrix))
-#     MIoU = np.where(np.isnan(MIoU), 0, MIoU)  # mean IoU
-#     return acc, MIoU.tolist()
+def one_frame_evaluation(fixed_pcd_path, direct_pcd_path, truth_pcd_path):
+    """
+    step 1: load 3 pcd: truth, direct, fixed
+    step 2: point matching 点云配对
+    step 3: calculate the TP分割错误的点被正确修改, TN分割没错的点没被正确修改
+    step 4: calculate metrics: IoU, precision ...
+    step 5: generate the report
+    """
+    from data_load import readpcd_rgb2label as RRGBL
+    point_truth = read_truth_labeled_rgb_pcd(truth_pcd_path)
+    point_direct = RRGBL(direct_pcd_path)
+    point_fixed = RRGBL(fixed_pcd_path)
+    print('truth length {}, direct length {}, fixed length {}'.format(len(point_truth),
+                                                                      len(point_direct),
+                                                                      len(point_fixed)))
+    # step 2 match
+    mix_matrix = []
+    j=0
+    for i in range(len(point_fixed)):
+        # 找到b中距离a[i]最近的点
+        jump = False
+        for k in range(5):
+            min_dist_b = sum([x - y for x, y in zip(point_truth[i][0:3], point_direct[i][0:3])])
+            if min_dist_b > 0.0001:
+                continue
+            else:
+                j += k
+                break
+            jump = True
+
+        if jump:
+            continue
+        else:
+            # [xyz, fixed, direct, truth]
+            mix_matrix.append(point_fixed[i][0:4] + [ point_direct[i+j][3], point_truth[i+j][3] ])
+    mix_matrix = np.array(mix_matrix)
+    # step 3 [xyz, fixed, direct, truth]
+    seg_wrong = []
+    TP = []; FP = []; FN = [] # point index list
+    for l in range(mix_matrix.shape[0]):
+        if np.all(mix_matrix[l, :][3:] == mix_matrix[l, :][3]):
+            continue
+        else:
+            if mix_matrix[l, :][4] != mix_matrix[l, :][5]:
+                seg_wrong.append(l) # 真值和直接不一样
+                if mix_matrix[l, :][3] == mix_matrix[l, :][5]:
+                    TP.append(l)  # 真值和修复后一样
+                else:
+                    FN.append(l)  # 真值和修复后不一样
+            elif mix_matrix[l, :][3] != mix_matrix[l, :][5]:
+                FP.append(l)
+    # step 4
+    print("TP is {}, FP is {}, FN is {}".format(len(TP), len(FP), len(FN)))
+    iou = len(TP)/(len(TP)+len(FP)+len(FN))
+    precision = len(TP)/(len(TP)+len(FP))
+    recall = len(TP)/(len(TP)+len(FN))
+    return mix_matrix, iou, precision, recall, len(seg_wrong)
+
+
+def read_truth_labeled_rgb_pcd(pcd_path):
+    """
+    read labled pcd
+    [xyz, label]
+     """
+    with open(pcd_path, 'r') as f:
+        lines = f.readlines()
+
+    # 获取点云数据的起始行
+    for i, line in enumerate(lines):
+        if line.startswith('DATA'):
+            start_line = i + 1
+            break
+    # read point cloud
+    data = []
+    for line in lines[start_line:]:
+        x, y, z, rgb, label, obj = line.split()
+        data.append([float(x), float(y), float(z), int(label)-1])  # label start from 1
+    return data
+
+
+# def multi_frame_evaluation(truth_pcd_path, fixed_pcd_path):
+#     """
+#     step 1: load 3 pcd: truth, direct, fixed
+#     step 2: point matching 点云配对
+#     step 3: calculate the TP分割错误的点被正确修改, TN分割没错的点没被正确修改
+#     step 4: calculate metrics: IoU, precision ...
+#     step 5: generate the report
+#     """
+#     point_truth = read_truth_labeled_rgb_pcd(truth_pcd_path)
+#     point_fix = read_truth_labeled_rgb_pcd(fixed_pcd_path)
+#
+#     return acc, iou_list, point_count, TP, FP
+
+
+def _evaluation1(confusion_matrix):
+    acc = np.diag(confusion_matrix).sum() / confusion_matrix.sum()  # accuracy
+    MIoU = np.diag(confusion_matrix) / (
+            np.sum(confusion_matrix, axis=1) + np.sum(confusion_matrix, axis=0) -
+            np.diag(confusion_matrix))
+    MIoU = np.where(np.isnan(MIoU), 0, MIoU)  # mean IoU
+    return acc, MIoU.tolist()
+
 
 def _evaluation(confusion_matrix):
     # Get the number of classes
@@ -194,9 +289,28 @@ def _hmm_eval_less_times(point_list, time, num_class, save_path):
 
 
 if __name__ == "__main__":
-    # 读txt进行直接评价，中间执行，读两个优化和无优化的txt，分别输出2个hmm结果
-    save_path = '/media/zlh/zhang/earth_rosbag/paper_data/t3bag4/evaluation'
-    source_txt = "/media/zlh/zhang/earth_rosbag/paper_data/t3bag4/evaluation/opti_for_hmm.txt"
+    """读txt进行直接评价，中间执行，读两个优化和无优化的txt，分别输出2个hmm结果"""
+    save_path = '/media/zlh/WD_BLACK/earth_rosbag/paper_data/t3bag1/evaluation'
+    source_txt = os.path.join(save_path, "origin_for_hmm.txt")
     read_tool = PointHMMEvaluation(source_txt, if_load=True)
     read_tool.filter_process()
+    read_tool.first_label_rate(os.path.join(save_path, "origin_eval_hmm.txt"))
+    read_tool.less_time_result_eval(4, os.path.join(save_path, "origin_eval_hmm.txt"))
+
+    source_txt = os.path.join(save_path, "opti_for_hmm.txt")
+    read_tool = PointHMMEvaluation(source_txt, if_load=True)
+    read_tool.filter_process()
+    read_tool.first_label_rate(os.path.join(save_path, "opti_eval_hmm.txt"))
     read_tool.less_time_result_eval(4, os.path.join(save_path, "opti_eval_hmm.txt"))
+
+    """读txt进行直接评价，一帧的结果"""
+    # mix_matrix, iou, precision, recall, seg_wrong = one_frame_evaluation("F:\dataset\outline_seg_slam\one_frame_evaluation\\fixed_175.pcd",
+    #                          "F:\dataset\outline_seg_slam\one_frame_evaluation\direct_175.pcd",
+    #                          "F:\dataset\outline_seg_slam\one_frame_evaluation\\truth_fixed_175.pcd")
+    # mix_matrix, iou, precision, recall = one_frame_evaluation("/media/zlh/zhang/dataset/outline_seg_slam/one_frame_evaluation/fixed_90.pcd",
+    #                          "/media/zlh/zhang/dataset/outline_seg_slam/one_frame_evaluation/direct_90.pcd",
+    #                          "/media/zlh/zhang/dataset/outline_seg_slam/one_frame_evaluation/truth_fixed_90.pcd")
+    # print(iou)
+    # print(precision)
+    # print(recall)
+    # print(seg_wrong)

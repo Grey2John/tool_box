@@ -39,7 +39,7 @@ state_standard_one = {
 }
 two_edge_state = [[0, 1], [0, 2], [1, 2]]
 label_rgb = [[255, 0, 0], [0, 255, 0], [0, 0, 255],  # 0, 1, 2
-             [255, 0, 255], [255, 255, 0], [0, 0, 0],  # 3, 4, 5
+             [255, 0, 255], [255, 255, 0], [100, 100, 100],  # 3, 4, 5
              [0, 255, 255]]  # 6
 
 
@@ -100,11 +100,11 @@ class ImagePose:
     #             state = (len(state_lib) - 1)*3 + j
     #     return state, label_state
 
-    def observe_state(self, h, w, pixel_set=8):
+    def observe_state(self, h, w, edge_D=8):
         """input the h, w is int"""
         # state = 0
         label_state = self.mask[h, w]
-        r = int(pixel_set/2)
+        r = int(edge_D)  # ???
         sub_mask = self.mask[h-r: h+r, w-r: w+r]
         sub_np = np.unique(sub_mask)
         state = edge_det[sub_np.size-1][np.sum(sub_np)]
@@ -126,27 +126,27 @@ class ImagePoseDic:
     def add_image_frame(self, image_pose):
         self.image_dic[image_pose.observing_num] = image_pose
 
-    def project_3Dpoints_and_grid_build(self, frame, scale_factor=8):
+    def project_3Dpoints_and_grid_build(self, frame, edge_D=8):
         """one frame point projection"""
         proj_state_count = 0
         new_index = []
         for index_p in self.image_dic[frame].point_index_list:  # every point in each frame
             if self.point_list_lib[index_p].if_obs:
-                xy, xydepth_c = project_3d_point_in_img(self.point_list_lib[index_p].coordinate,
-                                                        self.image_dic[frame].cam_k,
-                                                        self.image_dic[frame].pose_r,
-                                                        self.image_dic[frame].pose_t)
-                if xy is False:
+                uv, xyzdepth_c = project_3d_point_in_img(self.point_list_lib[index_p].coordinate,
+                                                         self.image_dic[frame].cam_k,
+                                                         self.image_dic[frame].pose_r,
+                                                         self.image_dic[frame].pose_t)
+                if uv is False:
                     self.point_list_lib[index_p].obs_state = None
                     continue
                 proj_state_count += 1
 
-                xy_int = np.round(xy).astype(int)
-                obs_state, label_state = self.image_dic[frame].observe_state(xy_int[1], xy_int[0],
-                                                                             pixel_set=scale_factor)  # observing state
-                # 先y后x，这是因为在NumPy中，数组的第一个索引对应于行，第二个索引对应于列]
+                uv_int = np.round(uv).astype(int)
+                obs_state, label_state = self.image_dic[frame].observe_state(uv_int[1], uv_int[0],
+                                                                             edge_D=edge_D)  # observing state
+                # 先y后x，这是因为在NumPy中，数组的第一个索引对应于行，第二个索引对应于列
                 self.point_list_lib[index_p].update_tims(obs_state, label_state)
-                self.one_CSS.grid_map_update(index_p, obs_state, label_state, xy, xy_int, xydepth_c)
+                self.one_CSS.grid_map_update(index_p, obs_state, label_state, uv, uv_int, xyzdepth_c)
                 new_index.append(index_p)
                 """for hmm recording"""
                 self.point_list_lib[index_p].obs_list.append(obs_state)
@@ -200,10 +200,38 @@ class ImagePoseDic:
             evaluation_data.append(p_new)
         return evaluation_data
 
-    def one_frame_process(self):
-        None
+    def one_frame_process(self, save_path, scale_factor=8, gen_pcd=True):
+        """start"""
+        frame_list = sorted(self.image_dic.keys())
+        for f in frame_list:
+            print("\033[32m===== image No. is {} =====\033[0m".format(f))
+            self.one_CSS = ClusterSegmentSystem(self.image_dic[f].mask,
+                                                grid_size=scale_factor)  # init self.image_dic[f].mask
+            point_num = self.project_3Dpoints_and_grid_build(f, edge_D=10)
+            """generate pcd"""
+            if gen_pcd:
+                points_obs, points_label = self.one_frame_pcd_data_generate(f)
+                pcd_generate(points_label, f, save_path, "direct_")
+                pcd_generate(points_obs, f, save_path, "edge_")
+            """re-segmentation"""
+            start_time = time.time()
+            self.one_CSS._init_data()
+            state_change_dic = self.one_CSS.cluster_detect(save_path=save_path)  # 改为扩展和聚类
+            self.point_state_optim(state_change_dic)  # fix point state
+            cluster_time = time.time()
+            print("frame {}， optimization of frame {},".format(f, (cluster_time - start_time)))
+            """generate optimized pcd"""
+            if gen_pcd:
+                pcd_start_time = time.time()
+                points_obs, points_label = self.one_frame_pcd_data_generate(f)  # xyz, rgb
+                pcd_generate(points_obs, f, save_path, "cluster_")
+                print("cluster_pcd generate {} cost {} s".format(f, (time.time() - pcd_start_time)))
+                pcd_start_time1 = time.time()
+                pcd_generate(points_label, f, save_path, "fixed_")
+                print("fixed_pcd generate {} cost {} s".format(f, (time.time() - pcd_start_time1)))
+                # image_visual = self.image_dic[frame].mask
 
-    def process(self, save_path, scale_factor=8, gen_pcd=False, log_info=False):
+    def multi_process(self, save_path, scale_factor=8, edge_D=8, gen_pcd=False, log_info=False):
         """main function to process every image"""
         """log update"""
         file = open(os.path.join(save_path, "evaluation", "re_seg_eval_origin.txt"), "w")
@@ -216,8 +244,9 @@ class ImagePoseDic:
         frame_list = sorted(self.image_dic.keys())
         for f in frame_list:
             print("\033[32m===== image No. is {} =====\033[0m".format(f))
-            self.one_CSS = ClusterSegmentSystem(self.image_dic[f].mask, scale_factor=scale_factor)  # init self.image_dic[f].mask
-            point_num = self.project_3Dpoints_and_grid_build(f, scale_factor)
+            self.one_CSS = ClusterSegmentSystem(self.image_dic[f].mask,
+                                                grid_size=scale_factor)  # init self.image_dic[f].mask
+            point_num = self.project_3Dpoints_and_grid_build(f, edge_D=edge_D)
             """evaluate the direct mapping"""
 
             dirct_map_result = self.output_evaluation_data(f)  # for evaluation [[xyz, obs, truth], ...]
@@ -229,14 +258,12 @@ class ImagePoseDic:
                 pcd_generate(points_obs, f, save_path, "edge_")
             """re-segmentation"""
             start_time = time.time()
-            self.one_CSS.crack_detect(3, save_path)  # ###########
-            crack_time = time.time()
-            state_change_dic = self.one_CSS.cluster_process()  # ###########
+            self.one_CSS._init_data()
+            state_change_dic = self.one_CSS.cluster_detect(save_path=save_path)  # 改为扩展和聚类
             self.point_state_optim(state_change_dic)  # fix point state
             cluster_time = time.time()
-            print("optimization of frame {}, crack cost {}s, cluster cost {}s".format(f,
-                                                                                      (crack_time - start_time),
-                                                                                      (cluster_time - crack_time)))
+            print("optimization of frame {}, optimization cost {}s".format(f,
+                                                                           (cluster_time - start_time)))
             """evaluate the optimized mapping"""
             optimized_map_result = self.output_evaluation_data(f)  # for evaluation [xyz, obs, truth]
             AP_opti, IoU_opti, p_num_opti, TP_opti, FP_opti = eval_one_times(optimized_map_result, f, 3)
@@ -245,7 +272,7 @@ class ImagePoseDic:
                               os.path.join(save_path, "evaluation", "re_seg_eval_origin.txt"))
             add_save_list2txt([f, p_num_opti, AP_opti] + IoU_opti,
                               os.path.join(save_path, "evaluation", "re_seg_eval_opti.txt"))
-            add_save_list2txt([f, point_num, crack_time - start_time, cluster_time - crack_time],
+            add_save_list2txt([f, point_num, cluster_time - start_time],
                               os.path.join(save_path, "evaluation", "re_seg_num_time.txt"))
             """generate optimized pcd"""
             if gen_pcd:
@@ -301,23 +328,24 @@ def project_3d_point_in_img(xyz, K, pose_r, pose_t):
 
     image_xy = np.dot(K, camera_point)
     u_v = image_xy[:2] / image_xy[2]  # [x, y] [heng, zong] [w, h] [col, row]
-    cut_uv = u_v - np.array([160, 0])
+    cut_uv = u_v - np.array([160, 0])  # 进过裁剪，从1280,720 到 960,720，宽度坐标减小
     if 5 <= cut_uv[0] <= 955 and 5 <= cut_uv[1] <= 715:  # available observing region
-        list_uvd = cut_uv.tolist()
-        list_uvd.append(camera_point[2] * 10)
-        return cut_uv, list_uvd  # not Rounding for keeping accuracy
+        list_uvwd = camera_point.tolist()
+        list_uvwd.append(np.linalg.norm(camera_point))
+        return cut_uv, list_uvwd  # not Rounding for keeping accuracy
     else:
         return False, False
 
 
-def one_frame_task(image_pose, points, frame, point_origin_state, save_path, scale_factor=0.25):
-    """one frame task, load data to ImagePoseDic class"""
+def one_frame_task(image_pose, points, frame, point_origin_state, save_path):
+    """one frame task, load data to ImagePoseDic class
+    用于读取单帧优化的过程，论文中有个图4张"""
     IPD = ImagePoseDic(1.0)
     IPD.add_image_frame(image_pose)  # image info
     IPD.point_list_lib = points  # point info
     IPD.image_dic[frame].point_index_list = list(range(len(points)))  # directly add point index
     # start
-    IPD.process(save_path)
+    IPD.one_frame_process(save_path, scale_factor=8) # scale_factor是网格尺寸
     """save the original pcd from r3live observation"""
     # pcd = LabelPCD(point_origin_state)  # origin pcd
     # pcd.generate(save_path, str(frame))
@@ -328,7 +356,7 @@ def multi_frame_task(data, save_path):
     """input ImagePoseDic class data:
     1. image dic: {frame: ImagePose}
     2. point_list_lib [Point ...]"""
-    opti_hmm_list, origin_hmm_list = data.process(save_path)  # [[xyz, truth, first state, re-seg], []]
+    opti_hmm_list, origin_hmm_list = data.multi_process(save_path)  # [[xyz, truth, first state, re-seg], []]
     """save two obs results"""
     save_path1 = os.path.join(save_path, "evaluation")
     """[[xyz, truth, first state, re-seg], []]

@@ -14,9 +14,9 @@ transmat = np.array([[1, 0,	0],
 emissionprob = np.array([[0.8547, 0.0093, 0.0072, 0.0697, 0.0059, 0,	0.002],
                       [0.3244,	0.6175, 0.0068, 0.034, 0.0043, 0.00291, 0.0097],
                       [0.4591,	0.0224, 0.4794, 0.0124, 0.0213, 0.0014, 0.0039]]) # matlab
-emissionprob_resg = np.array([[0.8547, 0.0093, 0.0072, 0.0497, 0.0059, 0.02,	0.002],
-                      [0.3244,	0.6175, 0.0068, 0.034, 0.0043, 0.00291, 0.0097],
-                      [0.4591,	0.0224, 0.4794, 0.0124, 0.0213, 0.0014, 0.0039]])
+emissionprob_resg = np.array([[0.80, 0.01, 0.02, 0.05, 0.05, 0.01, 0.01],
+                              [0.30, 0.60, 0.03, 0.04, 0.01, 0.01, 0.01],
+                              [0.40, 0.02, 0.50, 0.01, 0.04, 0.01, 0.01]])
 # emissionprob = np.array([[0.9547,  0.0093,  0.00722, 0.0197,  0.00879, 0.00003, 0.00026],
 #                       [0.32442, 0.6175, 0.00679, 0.03402, 0.00429, 0.0033, 0.00969],
 #                       [0.45914, 0.02241, 0.47941, 0.01243, 0.02132, 0.00137, 0.00392]]) # matlab
@@ -41,17 +41,18 @@ class PointHMM:
 
     def forward(self, ys):
         """  输入观测序列
-        :param ys:
+        :param ys: 原始概率
         :return: [P(x0), P(x1,y1), P(x2,y1..y2) ... P(xn, y1..yn)] where x0 is initial_state
         """
-        alpha_prob = np.multiply( self.initial_state, self.emission_prob[:, ys[0]].T) # t=1
+        alpha_prob = np.multiply( self.initial_state, self.emission_prob[:, ys[0]].T ) # t=1
         for i, y in enumerate(ys[1:]):
             alpha_prob = np.multiply( np.matmul(alpha_prob, self.trans_mat), self.emission_prob[:, y].T )
         self.current_state = alpha_prob
         return np.sum(alpha_prob)
 
     def filter(self, point_in):
-        """from xyz,initial,obs_list to xyz,label"""
+        """from xyz,initial,obs_list to xyz,label
+        point_in is [xyz, initial, obs_list]"""
         self.initial_state = startprob[point_in[3], :]
         # self.initial_state = startprob[0, :]
         point_out = point_in[:3]

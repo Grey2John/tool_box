@@ -7,6 +7,7 @@ import json
 import matplotlib.pyplot as plt
 from scipy.sparse import coo_matrix
 from scipy.spatial.transform import Rotation
+import open3d as o3d
 
 from data_loader import PointDataLoader
 from label_system import ImagePoseDic, Point, ImagePose
@@ -288,6 +289,24 @@ def read_truth_labeled_rgb_pcd(pcd_path):
     return data
 
 
+def readpcd_rgb2label(path):
+    '''读取pcd（由o3d生成的），读取rgb辨别语义，输出[xyz, label]'''
+    pcd = o3d.io.read_point_cloud(path)
+    # 获取点云的颜色信息
+    colors = np.asarray(pcd.colors) * 255  # 将颜色值从[0, 1]范围转换到[0, 255]
+    xyz = np.asarray(pcd.points)
+    point_truth = []
+    for color, coord in zip(colors, xyz):
+        if np.array_equal(color, [0, 0, 255]):
+            p = coord.tolist()+[0]
+        elif np.array_equal(color, [0, 255, 0]):
+            p = coord.tolist()+[1]
+        elif np.array_equal(color, [255, 0, 0]):
+            p = coord.tolist()+[2]  # red is sand - 2
+        point_truth.append(p)
+    return point_truth
+
+
 def point_sample_labeling(truth_label_points, sample_points, obs_start_index):
     """
     send a truth label for each point, if not exist, send None
@@ -329,9 +348,9 @@ def mask_edge_change(mask_matrix):
 
 
 if __name__ == "__main__":
-    # 产生某些帧的json
-    work_space = "/media/zlh/zhang/earth_rosbag/paper_data/t4bag22"
-    frames = list(range(5, 100, 5))
+    # 产生某些帧的json，I:\earth_rosbag\paper_data\\t4bag24，直接产生单帧的json文件
+    work_space = "I:\earth_rosbag\paper_data\\t3bag10"
+    frames = list(range(100, 150, 5))
     save_frame_data_json(work_space, frames)
     # save_entire_data_json(work_space)
 

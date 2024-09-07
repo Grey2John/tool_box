@@ -129,6 +129,8 @@ def plot_results(txt_father_path, bag_name):
         whole_data_origin = np.array([[int(item[0]), int(item[1]), float(item[2]), float(item[3]),
                                        float(item[4]), float(item[5])] for item in whole_data_origin])
 
+        whole_data_opti = whole_data_opti[np.argsort(whole_data_opti[:, 0])]
+        whole_data_origin = whole_data_origin[np.argsort(whole_data_origin[:, 0])]
         x_t1 = whole_data_opti[1:, 0]
         x_t2 = whole_data_origin[1:, 0]
         y_curve_opti = whole_data_opti[1:, [2, 4, 5]] * 100
@@ -162,6 +164,7 @@ if __name__ == "__main__":
     # if not os.path.exists(save_path):
     #     os.makedirs(save_path)
     # vpcd.save_pcd_one_obs(save_path)
-    bag_name = ["t3bag1","t3bag5","t3bag4","t3bag10_1","t4bag2","t4bag8","t4bag14",
+    bag_name = ["t3bag1","t3bag4","t3bag5","t3bag10","t4bag2","t4bag8","t4bag14",
                 "t4bag17","t4bag19","t4bag22","t4bag24","t5bag0","t5bag1","t5bag9","t5bag10"]
-    plot_results("/media/zlh/zhang/earth_rosbag/paper_data", bag_name)
+    plot_results("/media/zlh/WD_BLACK/earth_rosbag/paper_data", bag_name)
+    # plot_results("I:\earth_rosbag\paper_data", bag_name)
