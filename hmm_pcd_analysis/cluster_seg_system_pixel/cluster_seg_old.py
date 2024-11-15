@@ -61,9 +61,11 @@ class ClusterSegmentSystem:
             for every point projection, build the grid map
             basic task for cluster segmentation
         """
-        down_uv = np.floor(uv / self.grid_size).astype(int)  # 从round改过来
-        w = int(down_uv[0]/self.downsample_pixel)  # x related to w
-        h = int(down_uv[1]/self.downsample_pixel)
+        # down_uv = np.floor(uv / self.grid_size).astype(int)  # 从round改过来
+        # w = int(down_uv[0]/self.downsample_pixel)  # x related to w
+        # h = int(down_uv[1]/self.downsample_pixel)
+        w = uv_int[0] // self.grid_size
+        h = uv_int[1] // self.grid_size
         h_w_origin = np.array([uv_int[1], uv_int[0]])
         self.grid_point_num[h, w] += 1
         if self.exist_map[h, w] == 0:  # new grid
@@ -364,19 +366,19 @@ class EdgeDetectors:
         pass
 
 
-class ClusterCOOMatrix:
-    def __init__(self):
-        """the image index map for grid"""
-        self.row_list = []
-        self.col_list = []
-        self.grid_list = []  # GridUnit
-
-    def add_grid(self, new_grid):
-        self.row_list.append(new_grid.row)
-        self.col_list.append(new_grid.col)
-        self.grid_list.append(new_grid)
-
-    def adjust_grid(self, index):
-        # self.grid_list[index]
-        return None
+# class ClusterCOOMatrix:
+#     def __init__(self):
+#         """the image index map for grid"""
+#         self.row_list = []
+#         self.col_list = []
+#         self.grid_list = []  # GridUnit
+#
+#     def add_grid(self, new_grid):
+#         self.row_list.append(new_grid.row)
+#         self.col_list.append(new_grid.col)
+#         self.grid_list.append(new_grid)
+#
+#     def adjust_grid(self, index):
+#         # self.grid_list[index]
+#         return None
 

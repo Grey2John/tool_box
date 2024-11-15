@@ -164,7 +164,7 @@ if __name__ == "__main__":
     # if not os.path.exists(save_path):
     #     os.makedirs(save_path)
     # vpcd.save_pcd_one_obs(save_path)
-    bag_name = ["t3bag1","t3bag4","t3bag5","t3bag10","t4bag2","t4bag8","t4bag14",
+    bag_name = ["t3bag1","t3bag4","t3bag5","t3bag10_1","t4bag2","t4bag8","t4bag14",
                 "t4bag17","t4bag19","t4bag22","t4bag24","t5bag0","t5bag1","t5bag9","t5bag10"]
     plot_results("/media/zlh/WD_BLACK/earth_rosbag/paper_data", bag_name)
     # plot_results("I:\earth_rosbag\paper_data", bag_name)

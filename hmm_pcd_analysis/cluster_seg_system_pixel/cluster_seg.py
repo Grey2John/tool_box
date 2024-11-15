@@ -67,9 +67,11 @@ class ClusterSegmentSystem:
             for every point projection, build the grid map
             basic task for cluster segmentation
         """
-        down_uv = np.floor(uv / self.grid_size).astype(int)  # 从round改过来
-        w = int(down_uv[0]/self.downsample_pixel)  # x related to w
-        h = int(down_uv[1]/self.downsample_pixel)
+        # down_uv = np.floor(uv / self.grid_size).astype(int)  # 从round改过来
+        # w = int(down_uv[0]/self.downsample_pixel)  # x related to w
+        # h = int(down_uv[1]/self.downsample_pixel)
+        w = uv_int[0] // self.grid_size
+        h = uv_int[1] // self.grid_size
         h_w_origin = np.array([uv_int[1], uv_int[0]])
         self.grid_point_num[h, w] += 1
         if self.exist_map[h, w] == 0:  # new grid
@@ -142,7 +144,7 @@ class ClusterSegmentSystem:
                     local_point_grid_index += [g] * len(self.grid_list[g].point_index)
                     local_point_3state += self.grid_list[g].point_3state
                 # cluster
-                dbscan_eps = 0.1 if h > 45 else round(0.1 + 0.4 * (45 - h)/45, 2)
+                dbscan_eps = 0.2 if h > 45 else round(0.2 + 1 * (45 - h)/45, 2)
                 cluster = DBSCAN_CUS(dbscan_eps, min_pts, local_point_depth)
                 clusters_result = cluster.fit()
                 if 1 not in clusters_result:
@@ -207,7 +209,7 @@ class ClusterSegmentSystem:
                                          count,
                                          [h, w],
                                          scale=self.grid_size,
-                                         coe=1.2,
+                                         coe=1.8,
                                          save_path=save_path)
         if if_break:
             type_count = np.zeros([np.max(clusters_result) + 1, 2], dtype=np.int16)
@@ -378,18 +380,18 @@ class EdgeDetectors:
         pass
 
 
-class ClusterCOOMatrix:
-    def __init__(self):
-        """the image index map for grid"""
-        self.row_list = []
-        self.col_list = []
-        self.grid_list = []  # GridUnit
-
-    def add_grid(self, new_grid):
-        self.row_list.append(new_grid.row)
-        self.col_list.append(new_grid.col)
-        self.grid_list.append(new_grid)
-
-    def adjust_grid(self, index):
-        # self.grid_list[index]
-        return None
+# class ClusterCOOMatrix:
+#     def __init__(self):
+#         """the image index map for grid"""
+#         self.row_list = []
+#         self.col_list = []
+#         self.grid_list = []  # GridUnit
+#
+#     def add_grid(self, new_grid):
+#         self.row_list.append(new_grid.row)
+#         self.col_list.append(new_grid.col)
+#         self.grid_list.append(new_grid)
+#
+#     def adjust_grid(self, index):
+#         # self.grid_list[index]
+#         return None

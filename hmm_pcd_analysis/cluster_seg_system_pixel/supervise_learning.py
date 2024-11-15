@@ -43,7 +43,8 @@ def down_sample_from_list(point_in, alpha=0.1):
 
 
 if __name__ == "__main__":
-    path = "/media/zlh/zhang/earth_rosbag/paper_data/evaluation/p8r2m3T3/t3bag4/evaluation/opti_for_hmm.txt"
+    # path = "/media/zlh/zhang/earth_rosbag/paper_data/evaluation/p8r2m3T3/t3bag4/evaluation/opti_for_hmm.txt"
+    path = "/media/zlh/WD_BLACK/earth_rosbag/paper_data/t4bag2/evaluation/origin_for_hmm.txt"
     data = PointDataLoader(path)
     points_in = data.read_txt2list_points()
     point_out = down_sample_from_list(points_in)

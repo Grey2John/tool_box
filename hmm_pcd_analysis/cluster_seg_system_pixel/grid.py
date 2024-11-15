@@ -27,7 +27,7 @@ class GridUnit:
         """adjust each point projection"""
         self.point_index.append(point_index)
         self.point_xyzdepth_c.append(xyzdepth_c)  # xyz based on camera
-        self.point_obs_state.append(point_obs_state)
+        self.point_obs_state.append(point_obs_state)  # 这里的观测状态和HMM是独立的
         self.point_3state.append(label_state)
         self.point_state_flag[point_obs_state] = 1
         # self.class_count[point_obs_state] += 1
@@ -171,7 +171,7 @@ def delaunay_crack_detect(local_map_np, count, location, scale=8, coe=1, save_pa
     """单像素检索"""
     base_pixel = [i*scale for i in location]
     for p in local_map_np:
-        d = m_standard[int(p[0]+base_pixel[0]+1)][int(p[1]+base_pixel[1])] - \
+        d = m_standard[int(p[0]+base_pixel[0])][int(p[1]+base_pixel[1]+1)] - \
             m_standard[int(p[0]+base_pixel[0])][int(p[1]+base_pixel[1])]
         if p[-1] - p[-2] > coe*abs(d):
             return True
